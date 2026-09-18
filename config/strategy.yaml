@@ -1,0 +1,22 @@
+strategy:
+  ema_fast: 20
+  ema_medium: 50
+  ema_slow: 200
+  atr_period: 14
+  rsi_period: 2
+  scale_in:
+    SPY:
+      tiers:
+        - {name: T1, z_atr: -1.50, cumulative_weight: 0.20}
+        - {name: T2, z_atr: -2.25, cumulative_weight: 0.45}
+        - {name: T3, z_atr: -3.00, cumulative_weight: 0.70}
+    BTC:
+      tiers:
+        - {name: T1, z_atr: -1.75, cumulative_weight: 0.10}
+        - {name: T2, z_atr: -2.75, cumulative_weight: 0.25}
+        - {name: T3, z_atr: -4.00, cumulative_weight: 0.40}
+    GLD:
+      tiers:
+        - {name: T1, z_atr: -1.50, cumulative_weight: 0.15}
+        - {name: T2, z_atr: -2.25, cumulative_weight: 0.35}
+        - {name: T3, z_atr: -3.00, cumulative_weight: 0.55}

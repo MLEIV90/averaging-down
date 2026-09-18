@@ -1,0 +1,21 @@
+assets:
+  SPY:
+    name: SPDR S&P 500 ETF
+    asset_class: equity
+    currency: USD
+    timezone: "America/New_York"
+    benchmark: true
+    enabled: true
+  GLD:
+    name: SPDR Gold Shares
+    asset_class: commodity
+    currency: USD
+    timezone: "America/New_York"
+    enabled: true
+  BTC-USD:
+    name: Bitcoin USD
+    asset_class: crypto
+    currency: USD
+    timezone: "UTC"
+    resampling_cutoff: "16:00 EST" # 21:00 UTC para sincronizar velas EOD con el mercado de NY
+    enabled: true

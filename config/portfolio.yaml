@@ -1,0 +1,9 @@
+portfolio:
+  base_currency: EUR
+  initial_capital: 1100
+  contribution_frequency: monthly
+  expected_monthly_contribution: 1700
+  deployment_engine:
+    enabled: true
+    allow_full_deployment: false
+    cash_is_valid_position: true

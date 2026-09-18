@@ -1,0 +1,17 @@
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.env
+.env.*
+!.env.example
+.pytest_cache/
+.streamlit/secrets.toml
+data/raw/*
+data/processed/*
+data/features/*
+data/database/*.db
+*.db
+*.parquet
+*.json
+.DS_Store
