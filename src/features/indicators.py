@@ -1,16 +1,32 @@
 import numpy as np
 import pandas as pd
-def add_ema(df, periods=(20,50,200)):
-    out=df.copy()
-    for p in periods: out[f"EMA{p}"]=out["Close"].ewm(span=p,adjust=False).mean()
-    return out
-def add_atr(df, period=14):
-    out=df.copy(); pc=out["Close"].shift(1)
-    tr=pd.concat([out["High"]-out["Low"],(out["High"]-pc).abs(),(out["Low"]-pc).abs()],axis=1).max(axis=1)
-    out[f"ATR{period}"]=tr.rolling(period).mean(); return out
-def add_rsi(df, period=2):
-    out=df.copy(); d=out["Close"].diff()
-    gain=d.clip(lower=0).rolling(period).mean(); loss=(-d.clip(upper=0)).rolling(period).mean()
-    rs=gain/loss.replace(0,np.nan); out[f"RSI{period}"]=100-(100/(1+rs)); return out
-def add_drawdown(df):
-    out=df.copy(); out["Drawdown"]=out["Close"]/out["Close"].cummax()-1; return out
+
+def calculate_ema(series, span):
+    return series.ewm(span=span, adjust=False).mean()
+
+def calculate_atr(df, period=14):
+    high = df['High']
+    low = df['Low']
+    close = df['Close']
+    tr1 = high - low
+    tr2 = (high - close.shift(1)).abs()
+    tr3 = (low - close.shift(1)).abs()
+    tr = pd.concat([tr1, tr2, tr3], axis=1).max(axis=1)
+    return tr.rolling(window=period).mean()
+
+def calculate_d_atr(close, ema_fast, atr):
+    return (close - ema_fast) / atr
+
+def calculate_realized_volatility(close, windows=[10, 20, 60]):
+    log_returns = np.log(close / close.shift(1))
+    vol = {}
+    for window in windows:
+        vol[f'vol_{window}'] = log_returns.rolling(window=window).std() * np.sqrt(252)
+    return pd.DataFrame(vol)
+
+def calculate_rsi(close, period=14):
+    delta = close.diff()
+    gain = (delta.where(delta > 0, 0)).rolling(window=period).mean()
+    loss = (-delta.where(delta < 0, 0)).rolling(window=period).mean()
+    rs = gain / loss
+    return 100 - (100 / (1 + rs))
