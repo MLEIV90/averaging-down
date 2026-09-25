@@ -1,6 +1,16 @@
 import pandas as pd
 import numpy as np
 
+def max_drawdown(equity_curve):
+    """
+    Calcula el Drawdown Máximo de una curva de capital.
+    """
+    if equity_curve.empty:
+        return 0
+    rolling_max = equity_curve.cummax()
+    drawdown = (equity_curve - rolling_max) / rolling_max
+    return drawdown.min()
+
 def calculate_metrics(equity_curve):
     """
     Calcula métricas clave del backtest.
@@ -9,9 +19,7 @@ def calculate_metrics(equity_curve):
     
     cagr = (equity_curve.iloc[-1] / equity_curve.iloc[0]) ** (252 / len(equity_curve)) - 1
     
-    rolling_max = equity_curve.cummax()
-    drawdown = (equity_curve - rolling_max) / rolling_max
-    max_dd = drawdown.min()
+    max_dd = max_drawdown(equity_curve)
     
     sharpe = (returns.mean() / returns.std()) * np.sqrt(252)
     
