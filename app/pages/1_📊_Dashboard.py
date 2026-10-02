@@ -19,6 +19,8 @@ selected_asset = st.sidebar.selectbox("Select Asset", assets)
 @st.cache_data
 def load_data(ticker):
     df = yf.download(ticker, period="1y", interval="1d")
+    if isinstance(df.columns, pd.MultiIndex):
+        df.columns = df.columns.get_level_values(0)
     return df
 
 df = load_data(selected_asset)
@@ -72,4 +74,4 @@ fig.add_hline(y=-2.5, line_dash="dash", line_color="orange", row=2, col=1)
 fig.add_hline(y=-3.5, line_dash="dash", line_color="red", row=2, col=1)
 
 fig.update_layout(height=800, xaxis_rangeslider_visible=False)
-st.plotly_chart(fig, use_container_width=True)
+st.plotly_chart(fig, width='stretch')
