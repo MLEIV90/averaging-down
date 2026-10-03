@@ -4,11 +4,13 @@ from src.backtest.engine import run_backtest
 from src.backtest.metrics import calculate_metrics
 from src.data.config import REPOSITORY_ROOT, load_assets_config
 from src.data.engine import DataEngine
+from src.features.engine import FeatureEngine
 
 
 def run():
     configured_assets, _ = load_assets_config()
     data_engine = DataEngine()
+    feature_engine = FeatureEngine()
     data_dict = {}
     output_dir = REPOSITORY_ROOT / "data" / "processed"
     output_dir.mkdir(parents=True, exist_ok=True)
@@ -17,13 +19,9 @@ def run():
         if not config.enabled:
             continue
         frame = data_engine.load_or_download(ticker, allow_download=True)
-        # Keep the backtest engine's existing OHLCV interface; the data store's
-        # canonical persisted schema remains lowercase.
-        data_dict[ticker] = frame.rename(
-            columns={"open": "Open", "high": "High", "low": "Low", "close": "Close", "volume": "Volume"}
-        )
+        data_dict[ticker] = feature_engine.compute(frame).rename(columns={"close": "Close"})
 
-    equity_curve = run_backtest(data_dict)
+    equity_curve = run_backtest(data_dict, feature_engine.config)
     if equity_curve.empty:
         raise RuntimeError("Backtest engine returned an empty equity curve.")
 

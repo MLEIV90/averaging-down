@@ -10,6 +10,7 @@ Notable repository changes are recorded here.
 - Initial repository baseline, limitations, and open research questions in `RESEARCH_LOG.md`.
 - Central data acquisition, validation, normalization, Parquet storage, and JSON provenance through `src/data/`.
 - Deterministic Data Engine unit tests and a separately marked Yahoo Finance integration test.
+- Shared deterministic Feature Engine, configurable feature conventions, expected-value and look-ahead tests.
 
 ### Changed
 
@@ -18,6 +19,9 @@ Notable repository changes are recorded here.
 - Refactored data update, EOD, backtest, and Dashboard data access to consume the shared Data Engine.
 - Normalized daily data now uses lowercase OHLCV fields and a UTC-aware session-date index; provider raw data remains separately stored.
 - Pytest runs deterministic tests by default and excludes tests marked `integration`.
+- Dashboard, EOD, regime, and backtest now consume centralized lowercase features; `D_ATR` remains a deprecated compatibility alias for `z_atr`.
+- Added `config/features.yaml` with explicit periods, ATR/RSI methods, realized-volatility windows and annualization, and slope settings.
+- Removed unused EMA/ATR/RSI period keys from `config/strategy.yaml`; feature periods now have one configuration source.
 
 ### Known baseline limitations
 

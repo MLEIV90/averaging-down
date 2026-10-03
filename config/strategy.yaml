@@ -1,9 +1,4 @@
 strategy:
-  ema_fast: 20
-  ema_medium: 50
-  ema_slow: 200
-  atr_period: 14
-  rsi_period: 2
   scale_in:
     SPY:
       tiers:

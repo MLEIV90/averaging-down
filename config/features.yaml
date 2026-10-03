@@ -1,0 +1,16 @@
+# Software conventions transcribed from the pre-existing feature calculations.
+# These settings are configurable and are not financially validated.
+features:
+  ema_fast: 20
+  ema_medium: 50
+  ema_slow: 200
+  atr_period: 14
+  atr_method: sma_true_range
+  rsi_fast_period: 2
+  rsi_period: 14
+  realized_vol_period: 20
+  realized_vol_windows: [10, 20, 60]
+  realized_vol_return_method: log
+  annualization: 252
+  slope_lookback: 5
+  slope_method: difference

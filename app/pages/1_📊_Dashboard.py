@@ -1,9 +1,10 @@
 import streamlit as st
-import pandas as pd
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 from src.data.config import load_assets_config
 from src.data.engine import DataEngine
+from src.features.engine import FeatureEngine
+from src.features.config import load_feature_config
 
 st.set_page_config(page_title="Dashboard", layout="wide")
 st.title("📊 Market Dashboard")
@@ -13,13 +14,12 @@ config, _ = load_assets_config()
 assets = [ticker for ticker, details in config.items() if details.enabled]
 
 selected_asset = st.sidebar.selectbox("Select Asset", assets)
+feature_config = load_feature_config()
 
 # Load data
 @st.cache_data
 def load_data(ticker):
-    return DataEngine().load_or_download(ticker, allow_download=False).rename(
-        columns={"open": "Open", "high": "High", "low": "Low", "close": "Close", "volume": "Volume"}
-    )
+    return FeatureEngine().compute(DataEngine().load_or_download(ticker, allow_download=False))
 
 try:
     df = load_data(selected_asset)
@@ -28,36 +28,19 @@ except (FileNotFoundError, ValueError, OSError) as exc:
     st.info("Run `python -m scripts.update_data` from the repository root to populate the local store.")
     st.stop()
 
-# Calculate Indicators
-def calculate_indicators(df):
-    df['EMA20'] = df['Close'].ewm(span=20, adjust=False).mean()
-    df['EMA50'] = df['Close'].ewm(span=50, adjust=False).mean()
-    df['EMA200'] = df['Close'].ewm(span=200, adjust=False).mean()
-    
-    # ATR14
-    high_low = df['High'] - df['Low']
-    high_close = abs(df['High'] - df['Close'].shift())
-    low_close = abs(df['Low'] - df['Close'].shift())
-    ranges = pd.concat([high_low, high_close, low_close], axis=1)
-    tr = ranges.max(axis=1)
-    df['ATR14'] = tr.rolling(window=14).mean()
-    
-    # D_ATR
-    df['D_ATR'] = (df['Close'] - df['EMA20']) / df['ATR14']
-    return df
-
-df = calculate_indicators(df)
-
 # Metrics
 col1, col2, col3 = st.columns(3)
-last_price = df['Close'].iloc[-1].item()
-prev_price = df['Close'].iloc[-2].item()
+if len(df) < 2:
+    st.error("At least two validated observations are required to display the Dashboard.")
+    st.stop()
+last_price = df['close'].iloc[-1].item()
+prev_price = df['close'].iloc[-2].item()
 change = ((last_price - prev_price) / prev_price) * 100
-d_atr = df['D_ATR'].iloc[-1].item()
+z_atr = df['z_atr'].iloc[-1].item()
 
 col1.metric("Last Price", f"${last_price:.2f}")
 col2.metric("Daily Change", f"{change:.2f}%")
-col3.metric("D_ATR", f"{d_atr:.2f}")
+col3.metric("Z_ATR", f"{z_atr:.2f}")
 
 # Plotting
 fig = make_subplots(rows=2, cols=1, shared_xaxes=True, 
@@ -65,13 +48,13 @@ fig = make_subplots(rows=2, cols=1, shared_xaxes=True,
                     row_heights=[0.7, 0.3])
 
 # Price chart
-fig.add_trace(go.Candlestick(x=df.index, open=df['Open'], high=df['High'], low=df['Low'], close=df['Close'], name='Price'), row=1, col=1)
-fig.add_trace(go.Scatter(x=df.index, y=df['EMA20'], name='EMA20', line=dict(color='orange')), row=1, col=1)
-fig.add_trace(go.Scatter(x=df.index, y=df['EMA50'], name='EMA50', line=dict(color='blue')), row=1, col=1)
-fig.add_trace(go.Scatter(x=df.index, y=df['EMA200'], name='EMA200', line=dict(color='red')), row=1, col=1)
+fig.add_trace(go.Candlestick(x=df.index, open=df['open'], high=df['high'], low=df['low'], close=df['close'], name='Price'), row=1, col=1)
+fig.add_trace(go.Scatter(x=df.index, y=df[f"ema{feature_config.ema_fast}"], name=f"EMA{feature_config.ema_fast}", line=dict(color='orange')), row=1, col=1)
+fig.add_trace(go.Scatter(x=df.index, y=df[f"ema{feature_config.ema_medium}"], name=f"EMA{feature_config.ema_medium}", line=dict(color='blue')), row=1, col=1)
+fig.add_trace(go.Scatter(x=df.index, y=df[f"ema{feature_config.ema_slow}"], name=f"EMA{feature_config.ema_slow}", line=dict(color='red')), row=1, col=1)
 
 # D_ATR chart
-fig.add_trace(go.Scatter(x=df.index, y=df['D_ATR'], name='D_ATR', line=dict(color='purple')), row=2, col=1)
+fig.add_trace(go.Scatter(x=df.index, y=df['z_atr'], name='Z_ATR', line=dict(color='purple')), row=2, col=1)
 fig.add_hline(y=-1.5, line_dash="dash", line_color="green", row=2, col=1)
 fig.add_hline(y=-2.5, line_dash="dash", line_color="orange", row=2, col=1)
 fig.add_hline(y=-3.5, line_dash="dash", line_color="red", row=2, col=1)

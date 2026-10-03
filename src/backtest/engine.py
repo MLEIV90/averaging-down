@@ -1,11 +1,13 @@
 import pandas as pd
 import numpy as np
+from src.features.config import FeatureConfig, load_feature_config
 
-def run_backtest(data_dict):
+def run_backtest(data_dict, feature_config: FeatureConfig | None = None):
     """
     Simulación histórica vectorial avanzada. Reproduce los pesos de la máquina 
     de estados (Scale-in Tiers y De-risking) para el portfolio completo.
     """
+    feature_config = feature_config or load_feature_config()
     if not data_dict or 'SPY' not in data_dict:
         return pd.Series(dtype=float)
         
@@ -18,8 +20,8 @@ def run_backtest(data_dict):
     
     for ticker in returns.columns:
         df = data_dict[ticker].reindex(returns.index)
-        ema20 = df['Close'].ewm(span=20, adjust=False).mean()
-        ema200 = df['Close'].ewm(span=200, adjust=False).mean()
+        ema20 = df[f'ema{feature_config.ema_fast}']
+        ema200 = df[f'ema{feature_config.ema_slow}']
         
         # Proxy del estado vectorial:
         bull_regime = df['Close'] > ema200

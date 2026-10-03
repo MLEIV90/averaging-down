@@ -66,7 +66,7 @@ Normalized data uses lowercase OHLCV float64 columns and a UTC-aware `DatetimeIn
 ## Repository layout
 
 - `src/data/`: download, local storage and OHLCV validation
-- `src/features/`: technical indicators, volatility and regime helpers
+- `src/features/`: deterministic feature calculations, feature configuration and regime helpers
 - `src/strategy/`, `src/risk/`, `src/portfolio/`, `src/execution/`: strategy and portfolio components at varying levels of integration
 - `src/backtest/`: vectorized backtest and performance metrics
 - `src/core/`: shared enums and data models
@@ -76,3 +76,48 @@ Normalized data uses lowercase OHLCV float64 columns and a UTC-aware `DatetimeIn
 - `tests/`: current pytest suite
 
 No live broker orders are generated. Live execution and broker integration are out of scope.
+
+## Feature Engine
+
+The Data Engine's validated, lowercase OHLCV DataFrame (UTC-aware, ascending,
+unique `DatetimeIndex`) is the input contract. `FeatureEngine.compute()` in
+`src/features/engine.py` returns a copy containing the same OHLCV columns and
+aligned lowercase features. It does not download, repair, fill, or relabel data.
+The Dashboard, EOD script, regime helper, and vectorized backtest consume this
+shared implementation. Feature periods and conventions live in
+`config/features.yaml`.
+
+Current software conventions (tested for implementation correctness, not
+financially validated):
+
+| Feature | Current formula | Initial availability |
+|---|---|---|
+| `ema20`, `ema50`, `ema200` | `close.ewm(span=n, adjust=False)`; first close seeds the recurrence | First observation |
+| `atr14` | True Range max of `high-low`, `abs(high-prev_close)`, `abs(low-prev_close)`; rolling SMA (`sma_true_range`) | At observation `period - 1`; first True Range is `high-low` |
+| `z_atr` | `(close - ema20) / atr14`; zero ATR maps to NaN | When EMA and ATR are available |
+| `rsi2`, `rsi14` | Rolling simple averages of positive and negative close changes; first NaN change is treated as zero, matching legacy code | After `period` closes |
+| `realized_vol_10/20/60` | Sample standard deviation (`ddof=1`) of log close returns times `sqrt(annualization)`; default factor 252 | After `window` returns (`window + 1` closes) |
+| `asset_drawdown` | `close / close.cummax() - 1` | First observation |
+| `ema50_slope` | EMA50 difference over configured positional lookback; currently 5 | After lookback observations of EMA |
+
+Warm-up values remain NaN where the formula does not yet have enough data;
+there is no backfill. A constant RSI window has zero gains and losses, so its
+undefined value remains NaN; zero ATR also yields NaN for `z_atr`. The feature
+engine keeps asset-price drawdown separate from portfolio equity drawdown in
+`src/backtest/metrics.py`. `D_ATR` is retained as a deprecated function alias
+for `z_atr`; core output uses lowercase `z_atr`.
+
+The prior active EOD implementation used log returns, sample standard deviation,
+windows 10/20/60, and fixed factor 252. An unused helper separately used simple
+returns and a 20-observation window; it now calls the same centralized
+calculation API with the explicit `simple` return method to retain compatibility.
+The existing ATR calculation is simple moving average True Range, not Wilder
+ATR. Wilder remains an explicitly selectable implementation but is not the
+current configured convention.
+
+Open research decisions are recorded in `RESEARCH_LOG.md`: whether annualizing
+crypto volatility with 252 is appropriate; the financial interpretation of
+EMA slope and its lookback; RSI behavior for constant/one-sided moves; whether
+SMA True Range should be replaced after research; and the BTC session calendar.
+No thresholds, entry/exit rules, or strategy hypothesis were changed in this
+milestone.

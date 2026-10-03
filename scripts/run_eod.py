@@ -2,7 +2,7 @@ import json
 
 from src.data.config import REPOSITORY_ROOT, load_assets_config
 from src.data.engine import DataEngine
-from src.features.indicators import calculate_atr, calculate_d_atr, calculate_ema, calculate_realized_volatility, calculate_rsi
+from src.features.engine import FeatureEngine
 from src.features.regime import detect_market_regime, is_panic
 from src.risk.position_sizing import get_dynamic_allocation
 from src.strategy.exits import evaluate_exit
@@ -13,6 +13,7 @@ def run():
     configured_assets, _ = load_assets_config()
     assets = [ticker for ticker, config in configured_assets.items() if config.enabled]
     data_engine = DataEngine()
+    feature_engine = FeatureEngine()
     signals = []
 
     state_file = REPOSITORY_ROOT / "data" / "processed" / "portfolio_state.json"
@@ -23,22 +24,12 @@ def run():
     state_file.parent.mkdir(parents=True, exist_ok=True)
 
     for ticker in assets:
-        df = data_engine.load_or_download(ticker, allow_download=True).rename(
-            columns={"open": "Open", "high": "High", "low": "Low", "close": "Close", "volume": "Volume"}
-        )
+        df = feature_engine.compute(data_engine.load_or_download(ticker, allow_download=True))
         if df.empty:
             continue
 
-        df["EMA20"] = calculate_ema(df["Close"], 20)
-        df["EMA50"] = calculate_ema(df["Close"], 50)
-        df["EMA200"] = calculate_ema(df["Close"], 200)
-        df["ATR14"] = calculate_atr(df, 14)
-        df["D_ATR"] = calculate_d_atr(df["Close"], df["EMA20"], df["ATR14"])
-        df = df.join(calculate_realized_volatility(df["Close"]))
-        df["RSI14"] = calculate_rsi(df["Close"], 14)
-
-        regime = detect_market_regime(df)
-        panic = is_panic(df)
+        regime = detect_market_regime(df, feature_engine.config)
+        panic = is_panic(df, feature_engine.config)
         asset_state = portfolio_state.get(ticker, {})
         current_tier = asset_state.get("Target_Tier", "FLAT")
         last_z = asset_state.get("Last_Z_ATR", 0.0)
@@ -50,16 +41,16 @@ def run():
             last_z_atr=last_z,
         )
 
-        last_close = float(df["Close"].iloc[-1])
-        last_d_atr = float(df["D_ATR"].iloc[-1])
-        last_ema20 = float(df["EMA20"].iloc[-1])
-        vol_cols = [column for column in df.columns if "Vol" in column or "volatility" in column.lower()]
-        realized_vol = float(df[vol_cols[0]].iloc[-1]) if vol_cols else 0.15
+        last_close = float(df["close"].iloc[-1])
+        last_d_atr = float(df["z_atr"].iloc[-1])
+        last_ema20 = float(df[f"ema{feature_engine.config.ema_fast}"].iloc[-1])
+        realized_vol_period = 10 if 10 in feature_engine.config.realized_vol_windows else feature_engine.config.realized_vol_period
+        realized_vol = float(df[f"realized_vol_{realized_vol_period}"].iloc[-1])
 
         action, new_state = strategy_engine.get_action(last_d_atr, regime, panic)
         exit_action, reason = evaluate_exit(
-            ticker, last_close, last_ema20, float(df["RSI14"].iloc[-1]),
-            avg_price, float(df["ATR14"].iloc[-1]), new_state,
+            ticker, last_close, last_ema20, float(df[f"rsi{feature_engine.config.rsi_period}"].iloc[-1]),
+            avg_price, float(df[f"atr{feature_engine.config.atr_period}"].iloc[-1]), new_state,
         )
         final_action = action if action != "HOLD" else exit_action
         if final_action == "FULL_RESET":

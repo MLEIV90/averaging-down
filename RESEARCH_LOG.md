@@ -55,3 +55,34 @@ No new quantitative hypotheses or parameter values were adopted in this mileston
 - Yahoo Finance hourly coverage is limited; the existing fallback to daily data is retained and recorded in provenance. Historical data returned by Yahoo Finance may be revised. No immutable dataset snapshot/versioning is implemented.
 - Legacy local files have unknown provenance. A local-only load can normalize and label that uncertainty; an update triggers a full configured-range rebuild to avoid mixing unknown history with new data.
 - No strategy, feature, risk, portfolio, or backtest rule was changed in this milestone.
+
+## Feature Engine — 2026-10-03
+
+### Pre-implementation audit
+
+| Feature | Observed implementation | Input and warm-up | Audit result |
+|---|---|---|---|
+| EMA20/50/200 | EOD/backtest/dashboard used `ewm(span=n, adjust=False)` | Close; defined from first observation | Same EMA formula was repeated in three workflows. Preserve recurrence and centralize. |
+| ATR14 | True Range (`high-low`, `abs(high-prev_close)`, `abs(low-prev_close)`) then rolling SMA | OHLC; first TR is `high-low`; available after 14 TR values | Method was unambiguously SMA in code. Dashboard and EOD duplicated it. |
+| D_ATR/Z_ATR | `(close - EMA20) / ATR14` | Close, EMA20, ATR14; NaN until ATR warm-up | Volatility helper duplicated the same formula. Use `z_atr`; retain `calculate_d_atr` alias. |
+| RSI | Rolling SMA of positive/negative `close.diff()` components; initial NaN delta is replaced by zero via `where(..., 0)` | Close; first complete window occurs after `period` closes | EOD consumes RSI14; config separately has RSI2. No Wilder smoothing was present. Constant series yields NaN, one-sided gains yield 100. |
+| Realized volatility | Main indicator: log returns, rolling sample std, fixed `sqrt(252)`, windows 10/20/60. Unused helper: simple returns, default window 20, same factor. | Close; window returns, thus window+1 closes | Conflicting helper identified. EOD used main indicator implementation; preserve it and centralize. |
+| Drawdown | Backtest metrics calculate portfolio/equity drawdown only | Equity curve | No asset-price drawdown existed. New `asset_drawdown` is explicitly separate. |
+| EMA slope | No existing implementation found | Not applicable | OPEN QUESTION; engine exposes explicit difference/percent methods and current configurable difference convention is provisional. |
+
+### Feature Engine implementation conventions
+
+- `FeatureEngine.compute` accepts the Data Engine's lowercase validated OHLCV, requires UTC-aware, ascending, unique `DatetimeIndex`, and returns OHLCV plus aligned lowercase features. It does not modify timestamps or fill values.
+- EMA/ATR/RSI period keys previously present but unused in `config/strategy.yaml` were moved to the dedicated `config/features.yaml`; its old `rsi_period: 2` corresponds to `rsi_fast_period`, while the active EOD RSI14 is configured separately.
+- EMA uses the legacy `adjust=False` recurrence. ATR defaults to SMA True Range and offers explicit Wilder RMA for comparison; configured convention remains SMA. RSI uses legacy simple rolling averages, including the initial zero delta. Realized volatility preserves the EOD log-return/sample-standard-deviation formula and configurable annualization (default 252) with windows 10/20/60; the same calculation API retains an explicit simple-return mode for the legacy adapter. Drawdown uses asset close and its cumulative peak. Zero ATR maps to NaN; RSI with both average gain and loss zero remains NaN. No feature is backfilled.
+- EOD, Dashboard, regime, and backtest now consume the shared implementation. The backtest portfolio drawdown metric is unchanged and remains distinct. `z_atr` is canonical; the old D_ATR calculation API is a deprecated alias.
+- Look-ahead tests perturb only a future OHLC observation and verify earlier EMA, ATR, RSI, realized-volatility, and slope observations are unchanged. Reference tests use small synthetic series with hand-checkable values.
+- Software tests establish implementation behavior only; they do not validate financial hypotheses or parameters.
+
+### OPEN QUESTIONS
+
+- Is a fixed 252 annualization appropriate for BTC's 24/7 return calendar, and should the factor differ for other asset classes? The current setting preserves prior behavior and is not endorsed as a financial convention.
+- What slope definition, normalization, source EMA, and lookback have a research basis? The configured `ema50[t] - ema50[t-5]` is an implementation placeholder, not a validated signal.
+- Is simple rolling-average RSI intended, and how should constant/only-up/only-down windows be represented in signal logic? Engine leaves mathematically undefined constant windows as NaN; signal NaN policy is out of scope.
+- Should the explicitly preserved SMA True Range be retained or replaced by Wilder ATR after a research comparison? No silent change was made.
+- BTC session/calendar implications recorded in the Data Engine section remain open. No asset-specific feature periods were introduced.
