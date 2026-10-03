@@ -16,6 +16,7 @@
 - Keep financial parameters centralized and configurable; avoid duplicating them as hardcoded values across business logic.
 - Before implementing functionality, define deterministic tests for the specified behavior. Run relevant tests after changes and report the actual command and result. Never change quantitative behavior just to make a test pass without an explicit research decision.
 - Unit tests must not depend on the Internet. Keep network-dependent tests clearly separated from deterministic tests as the test suite is organized.
+- This repository's `pytest.ini` excludes tests marked `integration` from the default run. Run those separately with `python -m pytest -m integration` when network access is available.
 - Do not install dependencies unless the task requires it. Keep direct runtime dependencies declared in `requirements.txt`.
 - Prefer small, reviewable milestone changes. Update `CHANGELOG.md`; record hypotheses, experiments, results, limitations, decisions, and unresolved quantitative questions in `RESEARCH_LOG.md` when relevant.
 - Use repository-root-relative commands unless the code has been made independent of the working directory.

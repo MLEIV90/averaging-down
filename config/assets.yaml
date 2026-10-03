@@ -1,3 +1,7 @@
+data_defaults:
+  start: "2020-01-01"
+  adjusted: false
+
 assets:
   SPY:
     name: SPDR S&P 500 ETF
@@ -17,5 +21,7 @@ assets:
     asset_class: crypto
     currency: USD
     timezone: "UTC"
-    resampling_cutoff: "16:00 EST" # 21:00 UTC para sincronizar velas EOD con el mercado de NY
+    resampling_cutoff: "16:00 EST" # Legacy label; runtime uses the explicit UTC cutoff below.
+    daily_close_utc: "21:00"
+    source_interval: "1h"
     enabled: true

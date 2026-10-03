@@ -1,49 +1,38 @@
-import sys
 import json
-import pandas as pd
-import os
-from pathlib import Path
 
-# Resolución canónica absoluta
-sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
-
-from src.data.loader import load_local_data
-from src.data.downloader import download_market_data
 from src.backtest.engine import run_backtest
 from src.backtest.metrics import calculate_metrics
+from src.data.config import REPOSITORY_ROOT, load_assets_config
+from src.data.engine import DataEngine
+
 
 def run():
-    assets = ["SPY", "BTC-USD", "GLD"]
+    configured_assets, _ = load_assets_config()
+    data_engine = DataEngine()
     data_dict = {}
-    
-    os.makedirs('data/processed', exist_ok=True)
-    
-    for ticker in assets:
-        df = load_local_data(ticker, folder="raw")
-        if df is None or df.empty:
-            df = download_market_data(ticker, start="2020-01-01")
-        if not df.empty:
-            data_dict[ticker] = df
-            
-    # Ejecutar simulación vectorial
+    output_dir = REPOSITORY_ROOT / "data" / "processed"
+    output_dir.mkdir(parents=True, exist_ok=True)
+
+    for ticker, config in configured_assets.items():
+        if not config.enabled:
+            continue
+        frame = data_engine.load_or_download(ticker, allow_download=True)
+        # Keep the backtest engine's existing OHLCV interface; the data store's
+        # canonical persisted schema remains lowercase.
+        data_dict[ticker] = frame.rename(
+            columns={"open": "Open", "high": "High", "low": "Low", "close": "Close", "volume": "Volume"}
+        )
+
     equity_curve = run_backtest(data_dict)
-    
     if equity_curve.empty:
-        print("Error: El motor devolvió una curva vacía.")
-        return
-        
-    # Extraer métricas institucionales
+        raise RuntimeError("Backtest engine returned an empty equity curve.")
+
     metrics = calculate_metrics(equity_curve)
-    
-    # Exportar JSON de métricas (manejando tipos seguros)
-    safe_metrics = {k: float(v) for k, v in metrics.items()}
-    with open('data/processed/backtest_metrics.json', 'w') as f:
-        json.dump(safe_metrics, f, indent=2)
-        
-    # Exportar serie de tiempo para graficado en Streamlit
-    equity_curve.to_csv('data/processed/equity_curve.csv', header=['Equity'], index_label='Date')
-    
-    print("Backtest completado con éxito. Métricas y curva exportadas.")
+    safe_metrics = {key: float(value) for key, value in metrics.items()}
+    (output_dir / "backtest_metrics.json").write_text(json.dumps(safe_metrics, indent=2), encoding="utf-8")
+    equity_curve.to_csv(output_dir / "equity_curve.csv", header=["Equity"], index_label="Date")
+    print("Backtest completed; metrics and equity curve exported.")
+
 
 if __name__ == "__main__":
     run()

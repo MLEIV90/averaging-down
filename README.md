@@ -22,30 +22,30 @@ From the repository root:
 python -m streamlit run app/main.py
 ```
 
-Streamlit serves the app at `http://localhost:8501` by default. Some pages fetch market data from Yahoo Finance; that requires network access. The Dashboard currently downloads its own data instead of using the local data pipeline.
+Streamlit serves the app at `http://localhost:8501` by default. The Dashboard reads normalized, validated local data through `src/data/`. Populate or update the local market store with `python -m scripts.update_data` from the repository root; this operation requires network access.
 
 ## Data and EOD scripts
 
 From the repository root:
 
 ```text
-python scripts/update_data.py
-python scripts/run_eod.py
+python -m scripts.update_data
+python -m scripts.run_eod
 ```
 
-`update_data.py` downloads daily history for SPY, BTC-USD and GLD and saves it under `data/raw/`. The script may request BTC hourly data for NY-close resampling, subject to yfinance's history limits. `run_eod.py` loads local data where available, falls back to Yahoo Finance, and writes signals and portfolio state under `data/processed/`.
+`update_data` downloads the enabled assets configured in `config/assets.yaml`, persists provider data under `data/raw/`, and saves normalized validated daily data plus JSON provenance under `data/processed/`. Subsequent calls request only data after the local latest date, with an overlap for BTC aggregation. When a legacy cache has no provenance, the first update rebuilds from the configured start rather than mixing unknown and new source conventions. The BTC hourly request follows the repository's existing 21:00 UTC convention while hourly history is available; older requests fall back to provider daily bars, and metadata records the effective interval. `run_eod` uses the validated local store and downloads through the same Data Engine only when local data is absent. It writes signals and portfolio state under `data/processed/`.
 
-Paths in the current application, scripts, and configuration are generally relative to the current working directory. Run these commands from the repository root. Data and generated outputs are ignored by Git.
+Data and configuration paths used by the Data Engine resolve from the repository location. Data and generated outputs are ignored by Git.
 
 ## Run the backtest
 
 From the repository root:
 
 ```text
-python scripts/run_backtest.py
+python -m scripts.run_backtest
 ```
 
-The runner loads local daily files from `data/raw/`, and downloads data if any asset is missing. It writes `data/processed/backtest_metrics.json` and `data/processed/equity_curve.csv`, which the Backtest page reads. The current engine is a simplified vectorized weight rule, not a simulation of the EOD scale-in state machine. It does not currently model transaction costs, slippage, cash balances, or individual trades. Treat its output as exploratory, not as a validated strategy result.
+The runner loads validated data from the Data Engine, downloading only if no local source data is available. It writes `data/processed/backtest_metrics.json` and `data/processed/equity_curve.csv`, which the Backtest page reads. The current engine is a simplified vectorized weight rule, not a simulation of the EOD scale-in state machine. It does not currently model transaction costs, slippage, cash balances, or individual trades. Treat its output as exploratory, not as a validated strategy result.
 
 ## Tests
 
@@ -55,7 +55,13 @@ From the repository root:
 python -m pytest
 ```
 
-The current suite includes a Yahoo Finance download test and therefore requires network access; the remaining tests are local deterministic checks. The network test has not yet been separated or marked independently.
+By default, pytest runs deterministic local unit tests. The separately marked Yahoo Finance integration test requires network access and can be run with:
+
+```text
+python -m pytest -m integration
+```
+
+Normalized data uses lowercase OHLCV float64 columns and a UTC-aware `DatetimeIndex` whose daily midnight value labels the provider session date. The label is not an execution timestamp. Original provider timestamps and fields remain in raw Parquet files. Both raw and normalized datasets have JSON provenance sidecars. No forward-fill is performed. Gaps are reported; weekends are informational for exchange assets, weekday gaps remain ambiguous without an exchange holiday calendar, and any skipped daily bar for a 24/7 asset is a warning. The caller can reject warnings with `DataEngine(allow_warnings=False)`.
 
 ## Repository layout
 

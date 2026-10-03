@@ -1,130 +1,180 @@
-import pandas as pd
-import yfinance as yf
-from datetime import datetime
+from dataclasses import dataclass
+from datetime import datetime, timezone
 from typing import Optional
 
-def resample_btc_to_ny_close(df_1h: pd.DataFrame) -> pd.DataFrame:
-    """
-    Resamples 1h UTC data to daily EOD candles synchronized with NY close (16:00 EST / 21:00 UTC).
-    
-    A daily session runs from 21:00 UTC of Day T-1 to 21:00 UTC of Day T.
-    To bin this, we shift timestamps by -21 hours, so that:
-    - 21:00 UTC on Day T-1 becomes 00:00 UTC on Day T-1.
-    - 20:00 UTC on Day T becomes 23:00 UTC on Day T-1.
-    All these fall into the same calendar day 'Day T-1' when grouped.
-    Then we resample with daily frequency and label/index with Day T.
+import pandas as pd
+import yfinance as yf
+
+
+class DataDownloadError(RuntimeError):
+    """The external provider could not be reached or returned an invalid response."""
+
+
+class NetworkDataDownloadError(DataDownloadError):
+    """The request failed before receiving a usable provider response."""
+
+
+class InvalidProviderResponseError(DataDownloadError):
+    """The provider returned no rows or an unusable response shape."""
+
+
+class NoMarketDataError(InvalidProviderResponseError):
+    """The provider returned no rows for a syntactically valid request."""
+
+
+class InvalidDataRequestError(ValueError):
+    """A requested date range or frequency is malformed."""
+
+
+@dataclass(frozen=True)
+class DownloadResult:
+    raw: pd.DataFrame
+    bars: pd.DataFrame
+    source_interval: str
+    downloaded_at_utc: str
+    adjusted: bool
+    daily_close_utc: str | None
+
+
+def _field_level(columns: pd.Index) -> int | None:
+    if not isinstance(columns, pd.MultiIndex):
+        return None
+    expected = {"open", "high", "low", "close", "volume"}
+    for level in range(columns.nlevels):
+        if expected.issubset({str(value).lower() for value in columns.get_level_values(level)}):
+            return level
+    return None
+
+
+def _select_provider_asset(frame: pd.DataFrame) -> pd.DataFrame:
+    result = frame.copy()
+    if isinstance(result.columns, pd.MultiIndex):
+        level = _field_level(result.columns)
+        if level is None:
+            raise InvalidProviderResponseError("Yahoo Finance response has an unrecognized MultiIndex schema.")
+        result.columns = result.columns.get_level_values(level)
+    return result
+
+
+def resample_btc_to_ny_close(df_1h: pd.DataFrame, close_utc: str = "21:00") -> pd.DataFrame:
+    """Group hourly UTC bars to the existing configurable BTC session date.
+
+    The current repository convention is 21:00 UTC (16:00 EST). The resulting
+    midnight UTC timestamp is a session-date label, not an execution instant.
     """
     if df_1h.empty:
-        return df_1h
-        
-    # Ensure timezone is localized to UTC
-    if df_1h.index.tz is None:
-        df_1h = df_1h.tz_localize("UTC")
+        return df_1h.copy()
+    frame = _select_provider_asset(df_1h)
+    if not isinstance(frame.index, pd.DatetimeIndex):
+        raise InvalidProviderResponseError("Hourly provider data must have a DatetimeIndex.")
+    if not frame.index.is_monotonic_increasing or frame.index.has_duplicates:
+        raise InvalidProviderResponseError("Hourly provider timestamps must be ascending and unique before resampling.")
+    if frame.index.tz is None:
+        frame.index = frame.index.tz_localize("UTC")
     else:
-        df_1h = df_1h.tz_convert("UTC")
-        
-    # Shift times backward by 21 hours
-    shifted_df = df_1h.copy()
-    shifted_df.index = shifted_df.index - pd.Timedelta(hours=21)
-    
-    # Resample using the shifted index
-    resampler = shifted_df.resample("D")
-    
-    resampled_df = pd.DataFrame({
-        "Open": resampler["Open"].first(),
-        "High": resampler["High"].max(),
-        "Low": resampler["Low"].min(),
-        "Close": resampler["Close"].last(),
-        "Volume": resampler["Volume"].sum()
+        frame.index = frame.index.tz_convert("UTC")
+    try:
+        hour, minute = (int(part) for part in close_utc.split(":", maxsplit=1))
+        cutoff = pd.Timedelta(hours=hour, minutes=minute)
+    except (ValueError, TypeError) as exc:
+        raise ValueError(f"Invalid UTC daily close time: {close_utc!r}.") from exc
+    shifted = frame.copy()
+    shifted.index = shifted.index - cutoff
+    daily = shifted.resample("D").agg({
+        "Open": "first", "High": "max", "Low": "min", "Close": "last", "Volume": "sum"
     })
-    
-    # Shift the resulting daily index forward by 1 day to represent the end-of-session day
-    resampled_df.index = resampled_df.index + pd.Timedelta(days=1)
-    
-    # Drop any row that doesn't have complete data
-    resampled_df = resampled_df.dropna(subset=["Close"])
-    
-    return resampled_df
+    daily.index = (daily.index + pd.Timedelta(days=1)).tz_convert("UTC")
+    return daily.dropna(subset=["Close"])
+
+
+class MarketDataDownloader:
+    def download(
+        self,
+        ticker: str,
+        *,
+        start: Optional[str] = None,
+        end: Optional[str] = None,
+        interval: str = "1d",
+        adjusted: bool = False,
+        resample_cutoff_utc: str | None = None,
+    ) -> DownloadResult:
+        try:
+            parsed_start = datetime.strptime(start, "%Y-%m-%d").date() if start else None
+            parsed_end = datetime.strptime(end, "%Y-%m-%d").date() if end else None
+        except ValueError as exc:
+            raise InvalidDataRequestError("start and end must use YYYY-MM-DD format.") from exc
+        if parsed_start and parsed_end and parsed_start >= parsed_end:
+            raise InvalidDataRequestError("start must precede the exclusive end date.")
+        request_interval = "1h" if resample_cutoff_utc else interval
+        if resample_cutoff_utc and not start:
+            raise ValueError("A start date is required when requesting BTC hourly resampling.")
+        if resample_cutoff_utc and start:
+            try:
+                age_days = (datetime.now(timezone.utc).date() - datetime.strptime(start, "%Y-%m-%d").date()).days
+            except ValueError as exc:
+                raise ValueError("start/end must use YYYY-MM-DD format.") from exc
+            # yfinance hourly history is limited. Preserve the existing daily fallback,
+            # but record the effective interval so metadata cannot hide the switch.
+            if age_days > 700:
+                request_interval = "1d"
+                resample_cutoff_utc = None
+
+        try:
+            raw = yf.download(
+                ticker, start=start, end=end, interval=request_interval,
+                auto_adjust=adjusted, progress=False,
+            )
+            if raw is not None and not isinstance(raw, pd.DataFrame):
+                raise InvalidProviderResponseError(f"Yahoo Finance returned an unsupported response type for {ticker}.")
+            if raw is None or raw.empty:
+                raw = yf.Ticker(ticker).history(
+                    start=start, end=end, interval=request_interval,
+                    auto_adjust=adjusted, actions=True,
+                )
+            if raw is not None and not isinstance(raw, pd.DataFrame):
+                raise InvalidProviderResponseError(f"Yahoo Finance history returned an unsupported response type for {ticker}.")
+        except DataDownloadError:
+            raise
+        except Exception as exc:
+            raise NetworkDataDownloadError(f"Yahoo Finance download failed for {ticker}: {exc}") from exc
+        if not isinstance(raw, pd.DataFrame):
+            raise InvalidProviderResponseError(f"Yahoo Finance returned an unsupported response type for {ticker}.")
+        if raw is None or raw.empty:
+            raise NoMarketDataError(
+                f"Yahoo Finance returned no {request_interval} data for {ticker} in [{start}, {end})."
+            )
+        raw = _select_provider_asset(raw)
+        if resample_cutoff_utc:
+            bars = resample_btc_to_ny_close(raw, resample_cutoff_utc)
+        else:
+            bars = raw.copy()
+        if bars.empty:
+            raise NoMarketDataError(f"Yahoo Finance returned no usable bars for {ticker}.")
+        return DownloadResult(
+            raw=raw,
+            bars=bars,
+            source_interval=request_interval,
+            downloaded_at_utc=datetime.now(timezone.utc).isoformat(),
+            adjusted=adjusted,
+            daily_close_utc=resample_cutoff_utc,
+        )
+
 
 def download_market_data(
-    symbol: str, 
-    start: Optional[str] = None, 
-    end: Optional[str] = None, 
+    symbol: str,
+    start: Optional[str] = None,
+    end: Optional[str] = None,
     interval: str = "1d",
-    resample_btc: bool = False
+    resample_btc: bool = False,
+    adjusted: bool = False,
 ) -> pd.DataFrame:
-    """
-    Downloads historical market data from yfinance for a given symbol.
-    
-    Parameters:
-        symbol: The ticker symbol (e.g. 'SPY', 'GLD', 'BTC-USD').
-        start: Start date string (YYYY-MM-DD).
-        end: End date string (YYYY-MM-DD).
-        interval: Data interval (e.g. '1d', '1h').
-        resample_btc: If True and symbol is 'BTC-USD', will attempt to download '1h'
-                      data and resample it to EOD daily candles ending at 21:00 UTC (16:00 EST).
-                      Note: yfinance only provides '1h' data for the last 730 days.
-                      If the range is larger or '1h' fails, falls back to standard '1d' data.
-    """
-    # Force resample_btc to false if the date range is too far back (> 700 days from now)
-    if resample_btc and symbol == "BTC-USD":
-        try:
-            start_dt = datetime.strptime(start, "%Y-%m-%d") if start else None
-            if start_dt and (datetime.now() - start_dt).days > 700:
-                print(f"[Warning] Date range for {symbol} starts more than 700 days ago. "
-                      "1h historical data is limited by yfinance. Falling back to standard '1d' EOD.")
-                resample_btc = False
-        except Exception:
-            # If date parsing fails, let the download attempt run
-            pass
-
-    # If resample_btc is active and asset is BTC-USD, download 1h data
-    if resample_btc and symbol == "BTC-USD":
-        print(f"Downloading 1h data for {symbol} to resample with NY close...")
-        df = yf.download(symbol, start=start, end=end, interval="1h", auto_adjust=False, progress=False)
-        if not df.empty:
-            resampled = resample_btc_to_ny_close(df)
-            if not resampled.empty:
-                return resampled
-            else:
-                print("[Warning] BTC-USD resampling returned empty. Falling back to '1d'.")
-        else:
-            print("[Warning] Could not download 1h data for BTC-USD. Falling back to '1d'.")
-
-    # Standard download
-    df = yf.download(symbol, start=start, end=end, interval=interval, auto_adjust=False, progress=False)
-    
-    if df.empty:
-        # Fallback to Ticker.history (sometimes handles specific assets better)
-        ticker = yf.Ticker(symbol)
-        df = ticker.history(start=start, end=end, interval=interval, auto_adjust=False)
-        
-    if df.empty:
-        return pd.DataFrame()
-        
-    # Standardize MultiIndex columns if present (e.g., if download returns multiple columns per ticker)
-    if isinstance(df.columns, pd.MultiIndex):
-        df.columns = df.columns.get_level_values(0)
-        
-    # Clean up column names and index
-    df = df.copy()
-    
-    # Map lowercase columns to capitalized
-    cols_to_keep = {}
-    for col in df.columns:
-        if col.lower() in ["open", "high", "low", "close", "volume"]:
-            cols_to_keep[col] = col.capitalize()
-            
-    df = df[list(cols_to_keep.keys())].rename(columns=cols_to_keep)
-    
-    # Ensure index is datetime
-    if not isinstance(df.index, pd.DatetimeIndex):
-        df.index = pd.to_datetime(df.index)
-        
-    df.index.name = "Timestamp"
-    
-    # If the index has timezone, strip timezone to make it tz-naive for consistency in raw files
-    if df.index.tz is not None:
-        df.index = df.index.tz_localize(None)
-        
-    return df
+    """Backward-compatible DataFrame API; raises explicit errors on failure."""
+    result = MarketDataDownloader().download(
+        symbol,
+        start=start,
+        end=end,
+        interval=interval,
+        adjusted=adjusted,
+        resample_cutoff_utc="21:00" if resample_btc and symbol == "BTC-USD" else None,
+    )
+    return result.bars

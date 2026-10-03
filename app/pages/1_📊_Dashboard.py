@@ -1,29 +1,32 @@
 import streamlit as st
-import yfinance as yf
 import pandas as pd
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
-import yaml
+from src.data.config import load_assets_config
+from src.data.engine import DataEngine
 
 st.set_page_config(page_title="Dashboard", layout="wide")
 st.title("📊 Market Dashboard")
 
-# Load assets
-with open("config/assets.yaml", "r") as f:
-    config = yaml.safe_load(f)
-assets = [ticker for ticker, details in config['assets'].items() if details.get('enabled', True)]
+# Load configured assets and the validated local market-data store.
+config, _ = load_assets_config()
+assets = [ticker for ticker, details in config.items() if details.enabled]
 
 selected_asset = st.sidebar.selectbox("Select Asset", assets)
 
 # Load data
 @st.cache_data
 def load_data(ticker):
-    df = yf.download(ticker, period="1y", interval="1d")
-    if isinstance(df.columns, pd.MultiIndex):
-        df.columns = df.columns.get_level_values(0)
-    return df
+    return DataEngine().load_or_download(ticker, allow_download=False).rename(
+        columns={"open": "Open", "high": "High", "low": "Low", "close": "Close", "volume": "Volume"}
+    )
 
-df = load_data(selected_asset)
+try:
+    df = load_data(selected_asset)
+except (FileNotFoundError, ValueError, OSError) as exc:
+    st.error(f"Validated local data is unavailable for {selected_asset}: {exc}")
+    st.info("Run `python -m scripts.update_data` from the repository root to populate the local store.")
+    st.stop()
 
 # Calculate Indicators
 def calculate_indicators(df):
