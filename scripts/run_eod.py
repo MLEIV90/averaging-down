@@ -3,7 +3,7 @@ import json
 from src.data.config import REPOSITORY_ROOT, load_assets_config
 from src.data.engine import DataEngine
 from src.features.engine import FeatureEngine
-from src.features.regime import detect_market_regime, is_panic
+from src.features.regime import RegimeEngine
 from src.risk.position_sizing import get_dynamic_allocation
 from src.strategy.exits import evaluate_exit
 from src.strategy.scale_in import ScaleInEngine
@@ -14,6 +14,7 @@ def run():
     assets = [ticker for ticker, config in configured_assets.items() if config.enabled]
     data_engine = DataEngine()
     feature_engine = FeatureEngine()
+    regime_engine = RegimeEngine(feature_config=feature_engine.config)
     signals = []
 
     state_file = REPOSITORY_ROOT / "data" / "processed" / "portfolio_state.json"
@@ -28,8 +29,9 @@ def run():
         if df.empty:
             continue
 
-        regime = detect_market_regime(df, feature_engine.config)
-        panic = is_panic(df, feature_engine.config)
+        regime_result = regime_engine.classify_latest(df)
+        regime = regime_result.trend_regime
+        panic = regime_result.stress_regime == "PANIC"
         asset_state = portfolio_state.get(ticker, {})
         current_tier = asset_state.get("Target_Tier", "FLAT")
         last_z = asset_state.get("Last_Z_ATR", 0.0)
@@ -64,6 +66,7 @@ def run():
             "Ticker": ticker,
             "Close": last_close,
             "Regime": regime,
+            "Stress_Regime": regime_result.stress_regime,
             "D_ATR": last_d_atr,
             "Action": final_action,
             "Target_Tier": new_state,
@@ -75,6 +78,7 @@ def run():
             "Last_Z_ATR": float(strategy_engine.last_z_atr),
             "Avg_Buy_Price": last_close if "BUY" in final_action and avg_price == 0 else avg_price,
             "Regime": regime,
+            "Stress_Regime": regime_result.stress_regime,
             "Close": last_close,
             "Action": final_action,
             "Realized_Vol": realized_vol,

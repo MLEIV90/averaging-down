@@ -86,3 +86,39 @@ No new quantitative hypotheses or parameter values were adopted in this mileston
 - Is simple rolling-average RSI intended, and how should constant/only-up/only-down windows be represented in signal logic? Engine leaves mathematically undefined constant windows as NaN; signal NaN policy is out of scope.
 - Should the explicitly preserved SMA True Range be retained or replaced by Wilder ATR after a research comparison? No silent change was made.
 - BTC session/calendar implications recorded in the Data Engine section remain open. No asset-specific feature periods were introduced.
+
+## Regime Engine — 2026-10-03
+
+### Pre-implementation audit
+
+| Existing behavior | Exact observed rule | NaN/warm-up and transition behavior |
+|---|---|---|
+| Trend `BULL` | `close > ema_slow AND ema_fast >= ema_medium` (default EMA200/20/50) | EWM values start at the first close, so trend can classify from the first complete feature row. Comparisons against NaN are false. |
+| Trend `BEAR` | `close < ema_slow AND ema_medium < ema_slow` | Both inequalities are strict. |
+| Trend `NEUTRAL` | Remainder of observations | Equality at close/slow, failed BULL/BEAR criteria, or NaN comparisons all returned NEUTRAL in the old helper. No UNKNOWN state or historical series existed. |
+| PANIC volatility | `realized_vol_10 > tail(252).quantile(0.90)` | The current observation is included in the quantile. With warm-up NaN the comparison is false; the remaining shock condition can still trigger. |
+| PANIC shock | `close[t] - close[t-1] < -3 * ATR14[t]` | This is a signed one-bar price change in price units, not a peak-to-trough drawdown or percentage return. Strict boundary. |
+| Redundant code | `daily_dd` and `panic_dd` were computed, but never contributed to the returned boolean. Comments alternated between absolute daily return and drawdown interpretations. | Removing this unused calculation does not alter PANIC output. The actual shock rule above is preserved. |
+
+The old `is_panic` was a single bool and returned false for unavailable comparisons. It did not say whether both inputs were evaluated. The old trend helper classified each supplied frame's last row only; it had no transitions, memory, or point-in-time series API. There was no confidence/strength measure.
+
+### Regime Engine decisions
+
+- `RegimeEngine.classify_series` evaluates each row from that row and earlier observations; `classify_latest` is derived from its final row. `RegimeResult` contains timestamp, trend regime, stress regime, supporting feature values, reason, unavailable feature names, and an insufficient-data flag. No confidence score was invented.
+- Trend is **BULL / NEUTRAL / BEAR / UNKNOWN**. The audited BULL/BEAR inequalities and default EMA periods remain unchanged. Missing or NaN required trend features produce UNKNOWN, not NEUTRAL. EMA slope is available in supporting features but does not gate BULL.
+- Stress is independent: **PANIC / NORMAL / UNKNOWN**. PANIC occurs if either audited volatility or ATR shock condition is true. A positive known component is sufficient for PANIC even if the other is unavailable. Otherwise NORMAL requires both components to be evaluable; unavailable inputs yield UNKNOWN. This makes the missing-data state explicit rather than treating comparisons with NaN as proof of no stress.
+- PANIC parameters are centralized in `config/regime.yaml`: volatility period 10, trailing lookback 252, quantile 0.90, ATR multiplier 3.0. The rolling quantile uses `min_periods=1` and includes the current observation, matching the prior latest calculation's available-history behavior. Thresholds are provisional, not optimized or financially validated.
+- EOD now reads `RegimeResult`; its legacy `Regime` field remains the trend regime, `Stress_Regime` is additionally recorded, and the existing scale-in adapter receives trend plus the same boolean PANIC predicate (UNKNOWN maps to false there, matching the legacy helper's behavior). Scale-in, exits, sizing, allocation, and backtest rules were not redesigned.
+- The current backtest still uses its pre-existing `close > ema_slow` weight gate. That proxy is not the composite Regime Engine classifier. The new point-in-time `classify_series` API is available for a later backtest integration decision; substituting it now would change backtest behavior and is deferred.
+- The compatibility functions `detect_market_regime` and `is_panic` delegate to RegimeEngine. The first can now return UNKNOWN where missing inputs previously fell through to NEUTRAL; the second still returns a bool and maps UNKNOWN to false.
+- Deterministic tests cover strict/inclusive boundaries, BULL/NEUTRAL/BEAR transitions, NaN and missing features, insufficient warm-up, high-volatility-only PANIC, shock-only PANIC, both/neither, BULL+PANIC, BEAR+PANIC, series/latest agreement, and future perturbation invariance.
+- Implementation tests validate software behavior, not the financial meaning of a regime.
+
+### OPEN QUESTIONS
+
+- Should BULL require positive EMA slope, and which slope definition/lookback/source is supported by research? Current slope remains provisional and non-gating.
+- Should `ema_fast >= ema_medium` remain part of BULL? How should exact threshold equalities be interpreted financially, beyond preserving the current strict/inclusive comparisons?
+- Should PANIC remain orthogonal to trend? Is the statistical definition based on trailing volatility quantiles, a price shock, or both; should the current observation be part of its reference quantile; and how should shock versus persistent volatility be distinguished?
+- Does `close[t] - close[t-1] < -3 * ATR[t]` represent the intended shock, given ambiguity between daily return, drawdown, and ATR/price? This implementation preserves the observed absolute-price rule and marks it provisional.
+- What rolling history and calendar should apply to BTC's 24/7 bars? Current thresholds preserve repository behavior and are not an asset-calendar study.
+- How should the existing backtest-only `close > ema_slow` proxy map to the composite trend/stress result without changing the backtest hypothesis or accounting model?

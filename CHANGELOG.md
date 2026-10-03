@@ -22,6 +22,8 @@ Notable repository changes are recorded here.
 - Dashboard, EOD, regime, and backtest now consume centralized lowercase features; `D_ATR` remains a deprecated compatibility alias for `z_atr`.
 - Added `config/features.yaml` with explicit periods, ATR/RSI methods, realized-volatility windows and annualization, and slope settings.
 - Removed unused EMA/ATR/RSI period keys from `config/strategy.yaml`; feature periods now have one configuration source.
+- Added a structured Regime Engine with separate trend/stress states, causal series/latest APIs, explicit UNKNOWN handling, and configurable existing PANIC thresholds.
+- EOD now consumes RegimeEngine and records Stress_Regime while preserving its existing strategy consumers and thresholds.
 
 ### Known baseline limitations
 

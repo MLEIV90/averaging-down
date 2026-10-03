@@ -121,3 +121,38 @@ EMA slope and its lookback; RSI behavior for constant/one-sided moves; whether
 SMA True Range should be replaced after research; and the BTC session calendar.
 No thresholds, entry/exit rules, or strategy hypothesis were changed in this
 milestone.
+
+## Regime Engine
+
+`RegimeEngine` in `src/features/regime.py` consumes the Feature Engine output
+and provides `classify_series()` and `classify_latest()`. The historical API
+returns an aligned DataFrame; the latest API returns a `RegimeResult` with
+timestamp, separate `trend_regime` and `stress_regime`, supporting features,
+reason, unavailable inputs, and an insufficient-data flag. It does not return
+a confidence score. `UNKNOWN` means required inputs are missing or not yet
+available; it is distinct from a valid `NEUTRAL` trend and `NORMAL` stress.
+
+Trend rules preserve the prior inequalities: **BULL** iff `close > ema_slow`
+and `ema_fast >= ema_medium`; **BEAR** iff `close < ema_slow` and
+`ema_medium < ema_slow`; otherwise **NEUTRAL**. Any required missing/NaN trend
+feature yields **UNKNOWN**. EMA slope is exposed as a supporting feature but
+does not gate BULL.
+
+Stress is classified independently as **PANIC**, **NORMAL**, or **UNKNOWN**.
+The provisional PANIC rule preserves the existing conditions: the configured
+realized volatility is strictly greater than its trailing rolling quantile, or
+the signed close change is strictly less than negative `panic_atr_multiple`
+times ATR. The default quantile includes the current observation, matching the
+previous latest-bar `tail(252).quantile(0.90)` behavior. Parameters are in
+`config/regime.yaml` (10-period volatility, 252-observation lookback, 0.90
+quantile, 3.0 ATR multiple). If a component is unavailable, a confirmed PANIC from
+the other component is still reported; otherwise stress is `UNKNOWN` until
+both components can be evaluated. This differs semantically from the former
+boolean helper's implicit false on NaN and avoids treating unavailable stress
+data as proven NORMAL.
+
+Trend and stress can coexist, including **BULL + PANIC** and **BEAR + PANIC**.
+The EOD adapter preserves the previous `Regime` trend field and adds
+`Stress_Regime`; scale-in, exits, sizing, thresholds, and allocation rules were
+not redesigned. These classifications are software implementations of
+provisional rules, not financially validated regimes.

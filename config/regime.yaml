@@ -1,0 +1,7 @@
+# Existing PANIC thresholds, made explicit and configurable.
+# This definition is provisional and is not financially validated.
+regime:
+  panic_vol_period: 10
+  panic_vol_lookback: 252
+  panic_vol_quantile: 0.90
+  panic_atr_multiple: 3.0
