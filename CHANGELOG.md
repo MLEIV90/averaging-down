@@ -24,8 +24,10 @@ Notable repository changes are recorded here.
 - Removed unused EMA/ATR/RSI period keys from `config/strategy.yaml`; feature periods now have one configuration source.
 - Added a structured Regime Engine with separate trend/stress states, causal series/latest APIs, explicit UNKNOWN handling, and configurable existing PANIC thresholds.
 - Added a configurable deterministic Signal Engine with point-in-time opportunity components and explicit UNKNOWN/PANIC handling.
+- Added validated fill-derived `PositionState` and a deterministic scale-in proposal/fill API using the existing configurable tier targets.
 - EOD now consumes RegimeEngine and records Stress_Regime while preserving its existing strategy consumers and thresholds.
 - Added provisional per-asset Z_ATR + RSI2 extreme conditions, close-location reversal confirmation, BULL eligibility, PANIC blocking, and realized_vol_20 context output in the independent Signal Engine.
+- Replaced the `PositionState` stub with an immutable position-cycle state and strict tier configuration checks; retained the mutating `get_action()` as a legacy compatibility adapter.
 
 ### Known baseline limitations
 

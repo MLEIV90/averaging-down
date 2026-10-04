@@ -142,3 +142,32 @@ The old `is_panic` was a single bool and returned false for unavailable comparis
 - **OPEN QUESTION:** is BULL-only eligibility appropriate, or should NEUTRAL be tested as eligible under an explicit research design?
 - **OPEN QUESTION:** should realized volatility condition the distribution of Z_ATR extremes by trend/volatility state in a later study? No conditional model or additional volatility regime is implemented here.
 - Signal timestamp remains the input bar's session-date label; decision and earliest executable timestamp are still unresolved as recorded in the baseline.
+
+## Position State Machine / Scale-In Engine — 2026-10-04
+
+### Provisional design hypotheses
+
+- T1 requires `SignalResult.signal_state == ENTRY_CANDIDATE`, plus the configured T1 Z_ATR threshold. The engine consumes Signal Engine outputs and does not recalculate indicators or regimes.
+- T2 and T3 require their configured Z_ATR thresholds and a value strictly more extreme than the most recently filled tier's Z_ATR. They do not require another reversal confirmation; this is an explicit provisional design hypothesis.
+- BULL is the only eligible trend. PANIC blocks new buys. NEUTRAL, BEAR, UNKNOWN, missing Z_ATR, unavailable signal inputs, and unknown stress never cause a purchase.
+- Filled tiers progress monotonically T1 → T2 → T3; each signal evaluation proposes at most one tier. A flat cycle at a deep Z_ATR still proposes T1 first.
+- `cumulative_weight` is the target cycle exposure. Order increment is target minus already filled weight; the current schedules remain configurable hypotheses, not risk-based sizing or validated parameters.
+- A proposal is separate from a fill. Position state changes only through `apply_fill()` using the supplied actual fill price and timezone-aware fill timestamp. The average entry price is weighted by incremental exposure; anchor and entry timestamp remain those of the T1 fill; lowest price tracks known fills only.
+- Cycle reset is explicit. PANIC, trend changes, EMA recovery, time, and losses do not automatically reset or close the cycle. `partial_sell_stage` remains zero.
+- The old `get_action(d_atr, regime, is_panic)` adapter remains available with its previous mutating, signal-time semantics for legacy EOD and tests. The new PositionState engine is not yet wired into EOD.
+- These are software design choices and provisional scale-in hypotheses; implementation tests do not establish financial validity or alpha.
+
+### Integration limitation
+
+- `scripts/run_eod.py` still uses legacy `get_action()`, the existing exit function, separate allocation code, and JSON persistence. It is intentionally unchanged: signal/decision/order/fill status, execution timestamp, price source, and persistence contract have not been defined. The backtest and exit module are also unchanged.
+
+### OPEN QUESTIONS
+
+- Are cumulative tier targets 20/45/70 for SPY, 10/25/40 for BTC, and 15/35/55 for GLD appropriate?
+- Should T2/T3 require any reversal confirmation?
+- Should there be a minimum wait between tiers?
+- Should PANIC only block buys, or change exposure size?
+- Should a per-cycle maximum exposure exist separately from configured cumulative weights?
+- Is the first T1 fill the right anchor reference?
+- Should a time-based rule limit cycle duration?
+- What is the definitive signal → order → fill → persisted-position contract, including fill price and timestamps?

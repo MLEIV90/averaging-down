@@ -178,3 +178,24 @@ The new engine remains independent of `scripts/run_eod.py`: that entry point
 still emits legacy scale-in actions, and replacing or combining them would
 change EOD output semantics before strategy integration is specified. The
 legacy backtest remains untouched.
+
+## Position State and Scale-In Engine
+
+`ScaleInEngine.evaluate(signal, state)` consumes a `SignalResult` and validated
+`PositionState`, then returns an immutable `ScaleInDecision`. It proposes at
+most one tier and does not change the position. `apply_fill(state, decision,
+fill_price, fill_timestamp)` validates the decision against the configured
+tier and returns a new state based on that actual fill. The signal bar close is
+not used as an assumed fill price. `reset_cycle(state)` is an explicit reset;
+trend changes, PANIC, and time do not reset a position.
+
+`PositionState` stores completed cycle fills, including the first-fill anchor,
+lowest fill, cumulative target weight, weighted average entry, actual entry
+timestamp, last filled Z_ATR, and an unused partial-sell stage fixed at zero.
+Tier schedules in `config/strategy.yaml` are validated and remain provisional.
+`BTC-USD` uses the single `BTC` configuration. No exits, sizing adjustment,
+execution, or backtest integration is implemented here.
+
+The old mutating `ScaleInEngine.get_action(d_atr, regime, is_panic)` remains for
+`scripts/run_eod.py` and legacy callers. It preserves its legacy signal-time
+state semantics; new position logic should use `evaluate()` and `apply_fill()`.
