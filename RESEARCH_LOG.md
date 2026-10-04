@@ -122,3 +122,23 @@ The old `is_panic` was a single bool and returned false for unavailable comparis
 - Does `close[t] - close[t-1] < -3 * ATR[t]` represent the intended shock, given ambiguity between daily return, drawdown, and ATR/price? This implementation preserves the observed absolute-price rule and marks it provisional.
 - What rolling history and calendar should apply to BTC's 24/7 bars? Current thresholds preserve repository behavior and are not an asset-calendar study.
 - How should the existing backtest-only `close > ema_slow` proxy map to the composite trend/stress result without changing the backtest hypothesis or accounting model?
+
+## Signal Engine — 2026-10-04
+
+### Provisional software hypotheses
+
+- Entry opportunity requires the conjunction `z_atr <= asset threshold` AND `rsi2 <= 10`; thresholds are SPY -1.50, BTC -1.75, and GLD -1.50. `BTC-USD` is the repository symbol mapped to the configured `BTC` threshold.
+- Only BULL trend is eligible. NEUTRAL and BEAR remain ineligible; UNKNOWN inputs are not treated as valid states.
+- Reversal confirmation requires `close[t] > close[t-1]` and close location `(close-low)/(high-low) >= 0.60`, using only the current and prior bar. A zero range or unavailable inputs is UNKNOWN.
+- PANIC blocks otherwise complete entry candidates. An UNKNOWN stress state produces UNKNOWN and never silently becomes NORMAL or enables an entry.
+- `realized_vol_20` is reported as context only. It is not a gate, score, volatility state, or sizing input.
+- These are provisional software hypotheses and are not evidence of alpha or financially validated parameters.
+
+### Integration and OPEN QUESTIONS
+
+- The engine accepts centralized Feature Engine output and obtains regimes from `RegimeEngine`. It intentionally does not recalculate feature/regime logic.
+- `scripts/run_eod.py` continues to output its pre-existing scale-in state-machine actions. Replacing or merging those actions with the new opportunity states would alter EOD output semantics; no combined decision/execution contract has been specified. `src/backtest/engine.py` remains the documented legacy proxy.
+- **OPEN QUESTION:** should PANIC block, reduce size, require alternate confirmation, or define a separate strategy? This milestone implements only the requested initial PANIC block.
+- **OPEN QUESTION:** is BULL-only eligibility appropriate, or should NEUTRAL be tested as eligible under an explicit research design?
+- **OPEN QUESTION:** should realized volatility condition the distribution of Z_ATR extremes by trend/volatility state in a later study? No conditional model or additional volatility regime is implemented here.
+- Signal timestamp remains the input bar's session-date label; decision and earliest executable timestamp are still unresolved as recorded in the baseline.

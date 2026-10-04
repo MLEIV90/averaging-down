@@ -1,0 +1,19 @@
+# Initial signal hypotheses are provisional research settings, not validated alpha.
+signals:
+  rsi2_entry_threshold: 10
+  reversal_close_location_min: 0.60
+
+  assets:
+    SPY:
+      z_atr_entry_threshold: -1.50
+    BTC:
+      z_atr_entry_threshold: -1.75
+    GLD:
+      z_atr_entry_threshold: -1.50
+
+  regime:
+    eligible_trend_regimes:
+      - BULL
+
+  stress:
+    block_panic: true

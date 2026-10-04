@@ -156,3 +156,25 @@ The EOD adapter preserves the previous `Regime` trend field and adds
 `Stress_Regime`; scale-in, exits, sizing, thresholds, and allocation rules were
 not redesigned. These classifications are software implementations of
 provisional rules, not financially validated regimes.
+
+## Signal Engine
+
+`SignalEngine` in `src/strategy/signals.py` consumes `FeatureEngine` output and
+derives trend/stress states through `RegimeEngine`; it does not recalculate
+indicators, change regime rules, or size positions. Its `classify_series()` and
+`classify_latest()` APIs expose separate Z_ATR/RSI2 extremes, reversal
+confirmation, trend eligibility, stress blocking, realized-volatility context,
+deterministic reason codes, and unavailable inputs. Thresholds and gates live
+in `config/signals.yaml`.
+
+The provisional hypotheses are a per-asset Z_ATR threshold AND RSI2 <= 10,
+BULL-only regime eligibility, rising close plus close location >= 0.60 for
+reversal confirmation, and PANIC blocking. `BTC-USD` maps to the configured
+`BTC` threshold. `realized_vol_20` is exposed but does not gate signals. An
+UNKNOWN trend, stress state, or required input produces UNKNOWN and cannot
+enable an entry. These rules are not evidence of alpha or financial validation.
+
+The new engine remains independent of `scripts/run_eod.py`: that entry point
+still emits legacy scale-in actions, and replacing or combining them would
+change EOD output semantics before strategy integration is specified. The
+legacy backtest remains untouched.
