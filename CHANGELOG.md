@@ -29,6 +29,7 @@ Notable repository changes are recorded here.
 - Added provisional per-asset Z_ATR + RSI2 extreme conditions, close-location reversal confirmation, BULL eligibility, PANIC blocking, and realized_vol_20 context output in the independent Signal Engine.
 - Replaced the `PositionState` stub with an immutable position-cycle state and strict tier configuration checks; retained the mutating `get_action()` as a legacy compatibility adapter.
 - Added immutable Order and Fill records plus deterministic long-only cash, position, P&L, and account snapshot accounting. Costs default to zero; no broker or automatic fill path is connected.
+- Added a deterministic risk and position sizing layer that converts scale-in weight proposals into provisional quantities under separate allocation, risk, volatility, and cash limits; it remains independent from orders, fills, accounting, and portfolio integration.
 
 ### Known baseline limitations
 

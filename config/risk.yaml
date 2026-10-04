@@ -1,9 +1,21 @@
 risk:
+  # Provisional sizing hypotheses; not financially validated.
+  risk_budget_fraction: 0.01
+  stop_atr_multiple: 3.0
   max_portfolio_vol: 0.15
   max_single_asset_weight: 0.70
   max_total_deployment: 0.70
   min_cash_reserve: 0.30
-  volatility_multiplier: {min: 0.50, max: 1.50}
   initial_live_capital_fraction: 0.35
   leverage_allowed: false
   cfd_allowed: false
+
+volatility:
+  enabled: true
+  min_factor: 0.50
+  max_factor: 1.50
+  # Provisional targets; no target-volatility research validation is implied.
+  target_vol:
+    SPY: 0.15
+    BTC: 0.35
+    GLD: 0.15

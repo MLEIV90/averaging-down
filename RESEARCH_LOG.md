@@ -192,3 +192,33 @@ The old `is_panic` was a single bool and returned false for unavailable comparis
 - How should cycle target weight and risk budget become executable quantity using equity, cash, and portfolio constraints?
 - What portfolio cash constraints and reserve rules should apply?
 - Should acquisition costs be included in accounting cost basis or tracked separately as in this initial simplified model?
+
+## Risk and Position Sizing Engine — 2026-10-04
+
+### Implemented deterministic layer
+
+- `RiskSizingEngine.size()` accepts a `ScaleInDecision` and explicit `equity`, `available_cash`, `reference_price`, `atr`, and `realized_vol`; it returns a frozen `SizingDecision`. It reads only its configuration and supplied point-in-time inputs. It does not inspect `CashLedger`, consult market data, recalculate volatility, access global state, create `Order`/`Fill`, or mutate `PositionState` or accounting state.
+- Asset notional allocation is `equity * incremental_weight`; allocation quantity is that notional divided by the reference price. Reference price is for sizing and may differ from an eventual fill price.
+- Risk budget is equity times `risk_budget_fraction`. Stop distance is `stop_atr_multiple * ATR`; unadjusted risk quantity is risk budget divided by stop distance.
+- With volatility adjustment enabled, `volatility_factor = clip(target_vol / realized_vol, min_factor, max_factor)`. The factor multiplies the risk budget only. Final quantity is the minimum of allocation quantity, volatility-adjusted risk quantity, and available-cash quantity.
+- Binding ties use a deterministic precedence: ALLOCATION, then RISK, then CASH. Quantities stay fractional; no lot-size rounding is applied. Unsupported actions return `NO_SIZING`; non-positive results also return `NO_SIZING`. Invalid numerical inputs raise explicit `ValueError`s.
+- Existing `src/risk/position_sizing.py` helpers remain in place for legacy EOD behavior. The new engine is separate and does not change EOD, backtest, order, or accounting flows.
+
+### Provisional configuration hypotheses
+
+`config/risk.yaml` now sets `risk_budget_fraction: 0.01`, `stop_atr_multiple: 3.0`, volatility adjustment enabled, factor clipping to [0.50, 1.50], and target volatility of 0.15 for SPY, 0.35 for BTC, and 0.15 for GLD. These are implementation placeholders required to exercise the engine; they have not been optimized or financially validated. `BTC-USD` uses the single `BTC` target.
+
+The volatility factor adjusts risk budget only; it does not also scale allocation quantity. This is an explicit provisional sizing hypothesis, not a validated risk model. ATR is supplied by the caller from the configured Feature Engine; this sizing layer does not choose between ATR methods. Realized volatility is supplied by the caller and is never recalculated here.
+
+### OPEN QUESTIONS
+
+- What risk budget fraction is appropriate for research?
+- Should the volatility factor adjust risk budget, allocation, or another independently specified quantity?
+- What stop distance represents trade risk, and should it be linked to an actual exit/stop rule?
+- Should ATR use the current SMA True Range or Wilder convention for sizing?
+- Should risk budget depend on market regime?
+- Should target volatility and annualization for BTC use a 252- or 365-day convention?
+- Should T1/T2/T3 have distinct sizing rules?
+- Should each cycle have an absolute exposure cap?
+- How should target weight convert to quantity when other portfolio holdings and constraints are included?
+- What minimum quantity and fractional precision apply to actual instruments?
