@@ -171,3 +171,24 @@ The old `is_panic` was a single bool and returned false for unavailable comparis
 - Is the first T1 fill the right anchor reference?
 - Should a time-based rule limit cycle duration?
 - What is the definitive signal → order → fill → persisted-position contract, including fill price and timestamps?
+
+## Execution and Accounting Contract — 2026-10-04
+
+### Implemented deterministic software contract
+
+- `Order` and `Fill` are frozen records in `src/execution/orders.py`. Order states are PROPOSED, FILLED, REJECTED, and CANCELLED. Orders carry explicit signal, decision, and order timestamps; fills carry their own timestamp and actual `fill_price`. Accounting checks `signal <= decision <= order <= fill`, matching order/fill identifiers, asset, side, and quantity. All timestamps must be timezone-aware.
+- `AccountingEngine.apply_fill()` consumes an externally supplied full fill and returns a new immutable `CashLedger` with cash and per-asset `Position` values. It rejects duplicate fill/order application, negative cash, oversells, invalid inputs, mismatches, and non-PROPOSED orders. It never creates a fill or mutates `PositionState`.
+- BUY/SELL cash uses fill quantity × fill price and explicit commission/slippage costs (both default to zero). Average entry is quantity-weighted on buys and remains unchanged on partial sells. Realized P&L is recorded on sells only, net of that sell's costs; unrealized P&L is a separate observation from a current market price. Snapshots revalue positions without changing the ledger.
+- Accounting simplification: acquisition costs reduce cash but are not capitalized into average entry price or carried into later realized P&L. Sell costs reduce that sell's realized P&L. No tax, corporate action, FX, short, margin, partial-fill, or portfolio allocation behavior is modeled. Position market value remains unknown (zero in the ledger) until a snapshot receives a current market price.
+- `PositionState` remains separate. `ScaleInEngine.evaluate()` only proposes a decision; callers must separately provide the actual fill to `ScaleInEngine.apply_fill()` and `AccountingEngine.apply_fill()`. No automatic coupling or EOD/backtest integration was added.
+- These are deterministic implementation conventions, not financial validation.
+
+### OPEN QUESTIONS
+
+- What execution latency and earliest permitted execution convention should be used?
+- What fill convention and price source should the eventual backtest use?
+- Which commission model and parameter source should be researched?
+- Which slippage model and parameter source should be researched?
+- How should cycle target weight and risk budget become executable quantity using equity, cash, and portfolio constraints?
+- What portfolio cash constraints and reserve rules should apply?
+- Should acquisition costs be included in accounting cost basis or tracked separately as in this initial simplified model?

@@ -28,6 +28,7 @@ Notable repository changes are recorded here.
 - EOD now consumes RegimeEngine and records Stress_Regime while preserving its existing strategy consumers and thresholds.
 - Added provisional per-asset Z_ATR + RSI2 extreme conditions, close-location reversal confirmation, BULL eligibility, PANIC blocking, and realized_vol_20 context output in the independent Signal Engine.
 - Replaced the `PositionState` stub with an immutable position-cycle state and strict tier configuration checks; retained the mutating `get_action()` as a legacy compatibility adapter.
+- Added immutable Order and Fill records plus deterministic long-only cash, position, P&L, and account snapshot accounting. Costs default to zero; no broker or automatic fill path is connected.
 
 ### Known baseline limitations
 

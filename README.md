@@ -199,3 +199,9 @@ execution, or backtest integration is implemented here.
 The old mutating `ScaleInEngine.get_action(d_atr, regime, is_panic)` remains for
 `scripts/run_eod.py` and legacy callers. It preserves its legacy signal-time
 state semantics; new position logic should use `evaluate()` and `apply_fill()`.
+
+## Execution and Accounting Models
+
+`src/execution/orders.py` defines immutable `Order` and `Fill` records. `AccountingEngine.apply_fill()` in `src/execution/accounting.py` consumes an explicit full fill and returns a new `CashLedger`; it never creates fills or modifies the strategy's `PositionState`. The required chronology is signal timestamp ≤ decision timestamp ≤ order timestamp ≤ fill timestamp, all timezone-aware. Accounting uses only `Fill.fill_price`.
+
+BUY/SELL cash, long-only quantities, weighted average entry, realized P&L on sells, and observed-price unrealized P&L are represented independently. Commission and slippage fields default to zero. There is no broker routing, sizing, partial fills, margin, or EOD/backtest integration. Accounting simplifications and OPEN QUESTIONS, including execution timing, fill convention, cost models, and target-weight-to-quantity conversion, are recorded in `RESEARCH_LOG.md`.
