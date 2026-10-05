@@ -119,13 +119,22 @@ class ScaleInEngine:
         config_path: str | Path = DEFAULT_STRATEGY_CONFIG,
         initial_state: str = "FLAT",
         last_z_atr: float = 0.0,
+        tiers: tuple[ScaleInTier, ...] | None = None,
+        disable_additional_entries: bool = False,
+        regime_filter_enabled: bool = True,
     ):
         self.ticker = ticker
         self.asset = _normalize_asset(ticker)
         all_tiers = load_scale_in_config(config_path)
         if self.asset not in all_tiers:
             raise ValueError(f"No scale-in tier configuration for asset {ticker!r}.")
-        self._tiers = all_tiers[self.asset]
+        self._tiers = tuple(tiers) if tiers is not None else all_tiers[self.asset]
+        self.disable_additional_entries = bool(disable_additional_entries)
+        self.regime_filter_enabled = bool(regime_filter_enabled)
+        if not self._tiers or self._tiers[0].name != "T1":
+            raise ValueError("Scale-in override must retain T1.")
+        if any(t.name != f"T{i + 1}" for i, t in enumerate(self._tiers)):
+            raise ValueError("Scale-in tiers must be consecutive beginning with T1.")
         # Preserve the original public schedule shape for legacy callers.
         self.tiers = [
             {"name": tier.name, "z_atr": tier.z_atr, "cumulative_weight": tier.cumulative_weight}
@@ -178,7 +187,7 @@ class ScaleInEngine:
             return self._decision("NO_ACTION", None, state, signal, "signal_unknown", z_atr)
         if signal.signal_state == "UNKNOWN" or signal.insufficient_data or signal.unavailable_features:
             return self._decision("NO_ACTION", None, state, signal, "signal_unknown", z_atr)
-        if signal.trend_regime == "UNKNOWN":
+        if self.regime_filter_enabled and signal.trend_regime == "UNKNOWN":
             return self._decision("NO_ACTION", None, state, signal, "trend_unknown", z_atr)
         if signal.stress_regime == "UNKNOWN":
             return self._decision("NO_ACTION", None, state, signal, "stress_unknown", z_atr)
@@ -189,7 +198,7 @@ class ScaleInEngine:
         z_atr = float(z_atr)
         if signal.stress_regime == "PANIC":
             return self._decision("NO_ACTION", None, state, signal, "panic_blocked", float(z_atr))
-        if signal.trend_regime != "BULL":
+        if self.regime_filter_enabled and signal.trend_regime != "BULL":
             return self._decision("NO_ACTION", None, state, signal, "trend_regime_not_eligible", float(z_atr))
 
         if not state.cycle_active:
@@ -199,6 +208,9 @@ class ScaleInEngine:
             if z_atr > t1.z_atr:
                 return self._decision("NO_ACTION", None, state, signal, "tier_1_threshold_not_met", float(z_atr))
             return self._decision("BUY_T1", t1, state, signal, "tier_1_entry", float(z_atr))
+
+        if self.disable_additional_entries:
+            return self._decision("NO_ACTION", None, state, signal, "additional_entries_disabled", float(z_atr))
 
         if state.last_tier == "T3":
             return self._decision("NO_ACTION", None, state, signal, "tier_3_already_active", float(z_atr))

@@ -354,3 +354,16 @@ Analytics implementation and deterministic unit tests do not validate a strategy
 - **OPEN QUESTION:** The mechanical cost add-back is exact only for direct recorded cost deductions on the observed path; accepted quantity and trade-level attribution can depend on configured cost assumptions. Should a separately specified sensitivity experiment be authorized in a future milestone?
 
 Validation software tests do not constitute a validation of strategy profitability or predictive performance.
+# M13 — Ablation & sensitivity analysis (diagnostic only)
+
+M13 is a diagnostic research layer, not an optimization framework. The baseline is one run of the current production backtest using the existing config YAML files; its configuration hash is SHA-256 over the ordered filenames and exact file bytes. The same in-memory baseline configuration is used as the reference for every experiment.
+
+Each ablation changes one conceptual component. Supported ablations remove trend-regime eligibility (panic blocking remains), RSI2 entry gating, reversal confirmation, T2/T3 entries, volatility sizing, portfolio allocation limits, partial recovery exits, time stops, or structural stops. Existing production engine implementations perform all decisions.
+
+Sensitivity uses the explicit values in config/research.yaml; each run changes one parameter from baseline. Negative Z_ATR perturbations preserve their direction and every scale-in threshold variant is checked against the unchanged adjacent tier values. The currently configured SPY volatility target is the only target-volatility factor included. Values are not selected based on results.
+
+Configuration overrides are constructed in memory. The suite snapshots production YAML bytes before execution and checks them again after it. Experiment IDs hash experiment type, component/parameter, value and baseline configuration hash. Machine-readable JSON is deterministic and contains no generated timestamp. Analytics and M12 Validation are reused for each backtest result; failed validation yields INVALID.
+
+Limitations: results describe only caller-provided data and current engine architecture. Portfolio constraint ablation removes exposure, reserve and per-asset caps while retaining deterministic allocation mechanics. The no-scale-in counterfactual retains T1. Existing validation checks are software/research-integrity diagnostics, not proof of economic validity. Some validation checks can be NOT_EVALUABLE on the present BacktestResult schema. Observed sensitivity does not imply causal economic significance. This milestone makes no profitability or statistical-significance claim.
+
+OPEN QUESTION: approve additional target-volatility parameters, more assets/market data, or different perturbation values only as explicit future research decisions; this implementation does not select or recommend them.

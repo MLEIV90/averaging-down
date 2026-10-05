@@ -178,8 +178,8 @@ class PortfolioDecision:
 class PortfolioEngine:
     """Constrain risk sizing quantities using explicit point-in-time inputs."""
 
-    def __init__(self, config_path: str | Path = DEFAULT_PORTFOLIO_CONFIG):
-        self.config = load_portfolio_config(config_path)
+    def __init__(self, config_path: str | Path = DEFAULT_PORTFOLIO_CONFIG, *, config: PortfolioConfig | None = None):
+        self.config = config or load_portfolio_config(config_path)
 
     def evaluate(self, snapshot: PortfolioSnapshot, proposals: Sequence[AllocationProposal],
                  reference_prices: Mapping[str, float], *,

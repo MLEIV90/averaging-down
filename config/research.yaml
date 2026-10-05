@@ -1,0 +1,22 @@
+# M13 diagnostic experiment definition; never written to production strategy YAML.
+research:
+  ablations: [regime_filter, rsi2_filter, reversal_confirmation, scale_in, volatility_sizing, portfolio_constraints, partial_recovery_exit, time_stop, structural_stop]
+  sensitivity_grid:
+    - [strategy.scale_in.SPY.T1.z_atr, -1.5, [-1.25, -1.375, -1.625, -1.75]]
+    - [strategy.scale_in.SPY.T2.z_atr, -2.25, [-2.0, -2.125, -2.375, -2.5]]
+    - [strategy.scale_in.SPY.T3.z_atr, -3.0, [-2.5, -2.75, -3.25, -3.5]]
+    - [strategy.scale_in.BTC.T1.z_atr, -1.75, [-1.45, -1.6, -1.9, -2.05]]
+    - [strategy.scale_in.BTC.T2.z_atr, -2.75, [-2.4, -2.6, -2.9, -3.1]]
+    - [strategy.scale_in.BTC.T3.z_atr, -4.0, [-3.3, -3.6, -4.4, -4.7]]
+    - [strategy.scale_in.GLD.T1.z_atr, -1.5, [-1.25, -1.375, -1.625, -1.75]]
+    - [strategy.scale_in.GLD.T2.z_atr, -2.25, [-2.0, -2.125, -2.375, -2.5]]
+    - [strategy.scale_in.GLD.T3.z_atr, -3.0, [-2.5, -2.75, -3.25, -3.5]]
+    - [signals.rsi2_entry_threshold, 10, [8, 9, 11, 12]]
+    - [exits.partial_recovery.z_atr_threshold, 1.5, [1.25, 1.35, 1.65, 1.75]]
+    - [exits.partial_recovery.rsi2_threshold, 90, [72, 81, 95, 99]]
+    - [exits.structural_stop.atr_multiple, 3.0, [2.4, 2.7, 3.3, 3.6]]
+    - [exits.time_stop.max_cycle_days, 30, [24, 27, 33, 36]]
+    - [risk.volatility.target_vol.SPY, 0.15, [0.12, 0.135, 0.165, 0.18]]
+    - [risk.risk_budget_fraction, 0.01, [0.008, 0.009, 0.011, 0.012]]
+  output: data/processed/research_suite.json
+  optimization: false

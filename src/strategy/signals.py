@@ -31,6 +31,9 @@ class SignalConfig:
     )
     eligible_trend_regimes: tuple[str, ...] = ("BULL",)
     block_panic: bool = True
+    regime_filter_enabled: bool = True
+    rsi_filter_enabled: bool = True
+    reversal_confirmation_enabled: bool = True
 
     def __post_init__(self) -> None:
         for name in ("rsi2_entry_threshold", "reversal_close_location_min"):
@@ -61,6 +64,9 @@ class SignalConfig:
             raise ValueError("eligible_trend_regimes must contain known trend states.")
         if type(self.block_panic) is not bool:
             raise ValueError("block_panic must be a boolean.")
+        for name in ("regime_filter_enabled", "rsi_filter_enabled", "reversal_confirmation_enabled"):
+            if type(getattr(self, name)) is not bool:
+                raise ValueError(f"{name} must be a boolean.")
 
     @property
     def z_atr_thresholds(self) -> dict[str, float]:
@@ -195,29 +201,32 @@ class SignalEngine:
         stress = str(regimes.iloc[i]["stress_regime"])
 
         unavailable: list[str] = []
-        for name, value in (("z_atr", z_atr), (f"rsi{self.feature_config.rsi_fast_period}", rsi2),
-                            ("close", close), ("high", high), ("low", low),
-                            ("previous_close", previous_close)):
+        required_values = [("z_atr", z_atr), ("close", close), ("high", high), ("low", low)]
+        if self.config.rsi_filter_enabled:
+            required_values.append((f"rsi{self.feature_config.rsi_fast_period}", rsi2))
+        if self.config.reversal_confirmation_enabled:
+            required_values.append(("previous_close", previous_close))
+        for name, value in required_values:
             if value is None:
                 unavailable.append(name)
-        if trend == "UNKNOWN":
+        if trend == "UNKNOWN" and self.config.regime_filter_enabled:
             unavailable.extend(regimes.iloc[i]["unavailable_features"])
         if stress == "UNKNOWN":
             unavailable.extend(regimes.iloc[i]["unavailable_features"])
 
         z_extreme = None if z_atr is None else bool(z_atr <= self.config.z_atr_thresholds[threshold_asset])
-        rsi_extreme = None if rsi2 is None else bool(rsi2 <= self.config.rsi2_entry_threshold)
+        rsi_extreme = True if not self.config.rsi_filter_enabled else (None if rsi2 is None else bool(rsi2 <= self.config.rsi2_entry_threshold))
         extreme = None if z_extreme is None or rsi_extreme is None else bool(z_extreme and rsi_extreme)
         close_location = None
         if close is not None and high is not None and low is not None and high != low:
             close_location = (close - low) / (high - low)
-        elif close is not None and high is not None and low is not None:
+        elif self.config.reversal_confirmation_enabled and close is not None and high is not None and low is not None:
             unavailable.append("close_location")
-        reversal = None if close_location is None or close is None or previous_close is None else bool(
+        reversal = True if not self.config.reversal_confirmation_enabled else (None if close_location is None or close is None or previous_close is None else bool(
             close > previous_close and close_location >= self.config.reversal_close_location_min
-        )
+        ))
 
-        regime_eligible = None if trend == "UNKNOWN" else bool(trend in self.config.eligible_trend_regimes)
+        regime_eligible = True if not self.config.regime_filter_enabled else (None if trend == "UNKNOWN" else bool(trend in self.config.eligible_trend_regimes))
         stress_blocked = None if stress == "UNKNOWN" else bool(self.config.block_panic and stress == "PANIC")
         enough = not unavailable and extreme is not None and reversal is not None \
             and regime_eligible is not None and stress_blocked is not None

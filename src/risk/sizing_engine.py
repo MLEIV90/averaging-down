@@ -127,8 +127,8 @@ def _normalize_asset(asset: str) -> str:
 class RiskSizingEngine:
     """Turn a scale-in proposal into a quantity proposal; never routes or fills it."""
 
-    def __init__(self, config_path: str | Path = DEFAULT_RISK_CONFIG):
-        self.config = load_risk_sizing_config(config_path)
+    def __init__(self, config_path: str | Path = DEFAULT_RISK_CONFIG, *, config: RiskSizingConfig | None = None):
+        self.config = config or load_risk_sizing_config(config_path)
 
     def size(
         self,

@@ -96,8 +96,8 @@ class ExitDecision:
 class ExitEngine:
     """Evaluate supplied point-in-time observations and propose at most one exit."""
 
-    def __init__(self, config_path: str | Path = DEFAULT_EXIT_CONFIG):
-        self.config = load_exit_config(config_path)
+    def __init__(self, config_path: str | Path = DEFAULT_EXIT_CONFIG, *, config: ExitConfig | None = None):
+        self.config = config or load_exit_config(config_path)
 
     def evaluate(
         self, *, asset: str, position_quantity: float, anchor_price: float,

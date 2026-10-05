@@ -48,3 +48,9 @@ Notable repository changes are recorded here.
 - Some UI pages are placeholders, and not all `src/` modules are connected to a runtime workflow.
 - Yahoo Finance provider data and coverage can change; downloaded datasets are cached locally and are not versioned in Git.
 - Weekday gaps in exchange-traded data remain ambiguous without a holiday calendar.
+# M13 — Ablation and sensitivity research diagnostics
+
+- Added standalone immutable research results, deterministic experiment IDs and JSON reporting.
+- Reuses the production backtest, Analytics and Validation engines for a single exact baseline and controlled one-factor variants.
+- Added explicit ablations and sensitivity grid; overrides exist in memory and production YAML is checked byte-for-byte after each suite.
+- This milestone does not optimize parameters or change default strategy configuration.
