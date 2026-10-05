@@ -6,6 +6,10 @@ Notable repository changes are recorded here.
 
 ### Added
 
+- Added a sequential event-driven backtest that routes point-in-time proposals through sizing, portfolio constraints, next-bar paper fills, accounting, position state, and exit evaluation.
+- Added provisional zero-default commission/slippage configuration and structured portfolio, order, trade, position, pending-order, and per-asset outputs.
+- Passed estimated fill-cost rates into PortfolioEngine cash-capacity evaluation so accepted allocations preserve the configured reserve after estimated costs.
+- Updated the Backtest page to consume sequential engine outputs instead of legacy proxy metrics.
 - Added a deterministic portfolio allocation engine that constrains per-asset sizing proposals by configured asset, gross exposure, and cash reserve limits.
 - Added a deterministic, standalone ExitEngine with structural stop, time stop, partial recovery, explicit HOLD decisions, and cycle-reset contract.
 - Project development and quantitative integrity rules in `AGENTS.md`.

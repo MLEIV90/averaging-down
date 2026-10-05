@@ -1,0 +1,6 @@
+# Execution hypotheses for deterministic research simulation; not calibrated.
+backtest:
+  execution_model: next_bar_open
+  # Applied to notional and deducted by AccountingEngine; no validated rates exist.
+  commission_bps: 0.0
+  slippage_bps: 0.0

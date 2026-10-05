@@ -45,7 +45,7 @@ From the repository root:
 python -m scripts.run_backtest
 ```
 
-The runner loads validated data from the Data Engine, downloading only if no local source data is available. It writes `data/processed/backtest_metrics.json` and `data/processed/equity_curve.csv`, which the Backtest page reads. The current engine is a simplified vectorized weight rule, not a simulation of the EOD scale-in state machine. It does not currently model transaction costs, slippage, cash balances, or individual trades. Treat its output as exploratory, not as a validated strategy result.
+The runner loads validated local data through the Data Engine, downloading only if local data is absent. `src/backtest.engine.run_backtest()` is the canonical sequential event-driven pipeline. It writes portfolio/equity/cash curves, position history, orders, fills/trades, and a summary under `data/processed/`. The former vectorized EMA-weight proxy is retained only in `src/backtest/legacy_engine.py` as `run_legacy_backtest()` and is deprecated.
 
 ## Tests
 
@@ -234,3 +234,36 @@ modeled.
 This engine is standalone and is not connected to EOD, the legacy backtest,
 Dashboard, order creation, fills, or accounting. Values and software behavior
 are provisional research infrastructure, not validated portfolio guidance.
+
+## Sequential Backtest Engine
+
+`BacktestEngine` in `src/backtest/sequential.py` is the canonical backtest used
+by `scripts/run_backtest.py`. It accepts raw normalized OHLCV, validates it
+before feature calculation, then calls the shared Feature, Signal, Scale-In,
+Risk Sizing, Portfolio, Exit, Order/Fill, and Accounting engines in sequence.
+Accounting is the source of cash, holdings, realized/unrealized P&L, and equity.
+The immutable result includes portfolio and position histories, orders,
+completed trades, pending end-of-data orders, and per-asset summaries. No
+advanced performance analytics are calculated in this milestone. The Backtest
+page reads these sequential outputs; it does not implement quantitative rules.
+
+The execution convention is **next available bar open**. Features, regime,
+signals, exits, and sizing use data through the current bar; orders are created
+at that observation and can fill only at the next available bar for that asset.
+Signal timestamps use the repository's UTC session-date labels. They are not
+intraday exchange timestamps. SPY/GLD and BTC therefore follow their own
+available-bar calendars; no shared calendar is imposed. A last-bar order stays
+pending and receives no fabricated fill.
+
+`config/backtest.yaml` owns commission and slippage settings, both in basis
+points. Defaults are zero to support diagnostic comparisons and are not
+calibrated cost estimates. Fill price is the observed next-bar open; commission
+and the dollar slippage charge are applied once through AccountingEngine. The
+estimated combined cost rate is supplied to PortfolioEngine when reserving cash;
+actual next-open amounts are checked again before a buy fill.
+Stops are evaluated from the current bar and filled at the next available open,
+so overnight gaps can produce materially different outcomes from the stop
+threshold. Portfolio caps are evaluated at the decision reference price and can
+also drift after an execution gap. Daily bars do not identify intraday ordering.
+
+**Backtest implementation validity does not imply strategy profitability or financial validity.**

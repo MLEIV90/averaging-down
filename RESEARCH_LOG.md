@@ -276,3 +276,29 @@ The initial limits preserve legacy repository defaults: 70% maximum gross exposu
 - How should price movement between sizing reference and execution/fill affect approved notional and cash reserve?
 
 Tests establish deterministic implementation behavior only, not financial validity.
+
+## Sequential Backtest Engine — 2026-10-05
+
+### Implemented event and time contract
+
+- `src/backtest.engine.run_backtest()` now calls `BacktestEngine` in `src/backtest/sequential.py`. Raw normalized OHLCV is validated before the Feature Engine runs. The pipeline calls the existing Signal, Scale-In, Risk Sizing, Portfolio, Exit, Order/Fill, and Accounting components. The legacy EMA-weight vector proxy is moved to `src/backtest/legacy_engine.py` and renamed `run_legacy_backtest()` with a deprecation warning.
+- For each asset, current-bar OHLCV/features/signals/exit conditions are observed at its UTC session-date label. A resulting order is timestamped at that decision label and can fill only at the next available bar's open for that asset. BTC uses its own timestamps and missing sessions do not get synthesized. Session-date labels do not encode the actual exchange open/close wall time.
+- Asynchronous assets are merged on the union of their observed timestamps. Current bars update marks at close; positions are marked using the latest supplied close per asset. Pending orders fill before the current close observation. At end-of-data, the last order remains unfilled and is reported pending. Daily OHLC does not establish intraday ordering.
+- An active-position exit proposal takes precedence over a new scale-in proposal for the same asset on that observation. The engines allow one tier and one exit proposal per observation. Strategy state changes only after AccountingEngine applies the corresponding Fill. A full cycle resets only after its confirmed sell leaves zero quantity; a partial fill advances the partial stage once.
+- Commission and slippage are configured in `config/backtest.yaml` as basis points. Defaults are zero for diagnostic comparisons; no calibrated cost estimates are claimed. Fill price records the observed next-bar open and AccountingEngine deducts commission plus a separate dollar slippage cost exactly once. Next-open gap risk is retained: an order sized at the close may be rejected if its next-open notional plus fees exceeds cash, and an execution gap can move actual exposure beyond a cap approved at the decision reference price.
+- To preserve the cash reserve after estimated transaction costs, the backtest passes its combined configured cost rate to `PortfolioEngine.evaluate()`; PortfolioEngine applies that estimate to available buy capacity. This is an optional backward-compatible input and does not change its default zero-cost behavior. Actual open-gap amounts are checked before fill and may still reject an order.
+- AccountingEngine is the source of cash, marked positions, equity, and P&L. The event result includes portfolio curve (cash, marked value, equity, gross/net exposure, realized/unrealized P&L and costs), position state history, order/trade records, pending orders, and per-asset cycle/fill/holding/notional summaries. Advanced performance analytics remain deferred.
+
+### Limitations and OPEN QUESTIONS
+
+- Initial capital continues to come from `config/portfolio.yaml`; strategy, sizing, portfolio, feature, regime, and exit settings remain owned by their existing configurations. The legacy engine is not used by the public runner.
+- **OPEN QUESTION:** What exchange-time mapping should convert UTC session-date labels to actual SPY/GLD open timestamps, and how should holidays and half sessions affect next-bar execution?
+- **OPEN QUESTION:** Is a flat basis-point commission/slippage model sufficient, and what empirically supported asset-specific cost model should replace the zero defaults?
+- **OPEN QUESTION:** Should fees be capitalized into average entry cost or remain cash costs under AccountingEngine's current simplification?
+- **OPEN QUESTION:** How should a gap that pushes filled exposure beyond a portfolio cap be represented or mitigated without using future open information at decision time?
+- **OPEN QUESTION:** Should rejected next-open buys be canceled as implemented, resized at the open, or handled by a different explicit execution rule?
+- **OPEN QUESTION:** Should a partially filled/reduced scale-in advance the configured tier, given PositionState's tier model records completed tier actions rather than actual quantity?
+- **OPEN QUESTION:** The position state stores tier weight, not quantity. Should a future state model explicitly reconcile shares and target weights after risk sizing and portfolio reductions?
+- **OPEN QUESTION:** Should performance statistics and benchmark-relative analytics be computed in Milestone 11, and with which annualization conventions?
+
+Backtest implementation validity does not imply strategy profitability or financial validity.

@@ -1,55 +1,41 @@
-import streamlit as st
-import pandas as pd
 import json
-import plotly.graph_objects as go
 from pathlib import Path
 
-st.set_page_config(page_title="Backtest Analytics", layout="wide")
-st.title("📈 Backtest Analytics")
+import pandas as pd
+import plotly.graph_objects as go
+import streamlit as st
 
-metrics_path = Path('data/processed/backtest_metrics.json')
-equity_path = Path('data/processed/equity_curve.csv')
 
-# 1. Tarjetas de Métricas (KPIs)
-if metrics_path.exists():
-    with open(metrics_path, 'r') as f:
-        metrics = json.load(f)
-        
-    if metrics and len(metrics) > 0:
-        cols = st.columns(len(metrics))
-        for i, (k, v) in enumerate(metrics.items()):
-            # Formateo porcentual inteligente
-            if any(term in k.lower() for term in ['cagr', 'drawdown', 'rate', 'win']):
-                val = f"{v:.2%}"
-            else:
-                val = f"{v:.2f}"
-            cols[i].metric(k, val)
-    else:
-        st.warning("El diccionario de métricas está vacío.")
-else:
-    st.info("Ejecuta 'python scripts/run_backtest.py' para generar los resultados.")
+st.set_page_config(page_title="Sequential Backtest", layout="wide")
+st.title("Sequential Backtest")
 
-st.markdown("---")
+summary_path = Path("data/processed/backtest_summary.json")
+equity_path = Path("data/processed/equity_curve.csv")
+cash_path = Path("data/processed/cash_curve.csv")
 
-# 2. Gráfico de Curva de Capital (Equity Curve)
-if equity_path.exists():
-    equity_df = pd.read_csv(equity_path, index_col='Date', parse_dates=True)
-    
-    fig = go.Figure()
-    fig.add_trace(go.Scatter(
-        x=equity_df.index, y=equity_df['Equity'],
-        mode='lines', name='Strategy Equity',
-        line=dict(color='#00F0FF', width=2),
-        fill='tozeroy', fillcolor='rgba(0, 240, 255, 0.1)'
-    ))
-    
-    fig.update_layout(
-        title="Cumulative Strategy Returns",
-        yaxis_title="Capital Múltiple",
-        xaxis_title="Fecha",
-        height=600,
-        template="plotly_dark",
-        hovermode="x unified",
-        margin=dict(l=0, r=0, t=40, b=0)
-    )
-    st.plotly_chart(fig, width='stretch')
+if not summary_path.exists() or not equity_path.exists():
+    st.info("Run `python -m scripts.run_backtest` to create sequential backtest results.")
+    st.stop()
+
+summary = json.loads(summary_path.read_text(encoding="utf-8"))
+columns = st.columns(5)
+columns[0].metric("Initial equity", f"{summary['initial_equity']:.2f}")
+columns[1].metric("Final equity", f"{summary['final_equity']:.2f}")
+columns[2].metric("Filled trades", str(summary["filled_trade_count"]))
+columns[3].metric("Pending orders", str(summary["pending_order_count"]))
+columns[4].metric("Transaction costs", f"{summary['total_transaction_costs']:.2f}")
+
+equity = pd.read_csv(equity_path, index_col="Date", parse_dates=True)
+fig = go.Figure()
+fig.add_trace(go.Scatter(x=equity.index, y=equity["Equity"], mode="lines", name="Equity"))
+if cash_path.exists():
+    cash = pd.read_csv(cash_path, index_col="Date", parse_dates=True)
+    fig.add_trace(go.Scatter(x=cash.index, y=cash["Cash"], mode="lines", name="Cash"))
+fig.update_layout(title="Sequential portfolio history", yaxis_title="Portfolio value",
+                  xaxis_title="UTC session-date label", height=500, hovermode="x unified")
+st.plotly_chart(fig, width="stretch")
+
+st.caption(
+    "Next available bar open execution. Backtest implementation validity does not imply "
+    "strategy profitability or financial validity."
+)

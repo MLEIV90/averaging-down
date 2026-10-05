@@ -182,9 +182,13 @@ class PortfolioEngine:
         self.config = load_portfolio_config(config_path)
 
     def evaluate(self, snapshot: PortfolioSnapshot, proposals: Sequence[AllocationProposal],
-                 reference_prices: Mapping[str, float]) -> PortfolioDecision:
+                 reference_prices: Mapping[str, float], *,
+                 transaction_cost_rate: float = 0.0) -> PortfolioDecision:
         if not isinstance(snapshot, PortfolioSnapshot):
             raise TypeError("snapshot must be a PortfolioSnapshot.")
+        transaction_cost_rate = _number(transaction_cost_rate, "transaction_cost_rate")
+        if transaction_cost_rate < 0:
+            raise ValueError("transaction_cost_rate cannot be negative.")
         normalized_prices: dict[str, float] = {}
         for name, raw in reference_prices.items():
             asset = _asset(name)
@@ -248,7 +252,8 @@ class PortfolioEngine:
             else:
                 constraints.append(("MAX_ASSET_WEIGHT", max(0.0, weights[asset] * snapshot.equity - existing) / price))
                 constraints.append(("MAX_GROSS_EXPOSURE", max(0.0, self.config.max_gross_exposure * snapshot.equity - accepted_gross * snapshot.equity) / price))
-                constraints.append(("CASH_RESERVE", max(0.0, reserve_cash_limit - cash_spent) / price))
+                constraints.append(("CASH_RESERVE", max(0.0, reserve_cash_limit - cash_spent)
+                                   / (price * (1 + transaction_cost_rate))))
                 allowed = min(value for _, value in constraints)
                 tolerance = max(1e-12, requested * 1e-12)
                 binding_names = [name for name, value in constraints if name != "REQUESTED"
@@ -264,7 +269,7 @@ class PortfolioEngine:
             reduction = notional - approved_notional
             if allowed > 0:
                 accepted_gross += approved_notional / snapshot.equity if snapshot.equity else 0.0
-                cash_spent += approved_notional
+                cash_spent += approved_notional * (1 + transaction_cost_rate)
             resulting = (existing + approved_notional) / snapshot.equity if snapshot.equity else 0.0
             results[asset] = AllocationDecision(
                 asset, requested, allowed, notional, approved_notional, current_weight,
