@@ -6,6 +6,8 @@ Notable repository changes are recorded here.
 
 ### Added
 
+- Added standalone M12 research-integrity validation for accounting invariants, time-order evidence, deterministic reports, supplied benchmarks, actual fill costs, scale-in cycle diagnostics, concentration, sample-size warnings, and degenerate outcomes.
+- Added `config/validation.yaml`, the `src.validation.run_validation()` API, canonical report hashing, optional double-run helper, separate `--validation` JSON output, and a thin Backtest-page validation summary.
 - Added a standalone immutable analytics report for sequential backtest performance, drawdowns, completed-cycle trade statistics, exposure, actual fill costs, optional caller-supplied benchmark, and per-asset attribution.
 - Added configurable analytics conventions in `config/analytics.yaml`, deterministic synthetic unit coverage, optional `--analytics` summary export, and Backtest page metrics/drawdown display.
 - Added a sequential event-driven backtest that routes point-in-time proposals through sizing, portfolio constraints, next-bar paper fills, accounting, position state, and exit evaluation.

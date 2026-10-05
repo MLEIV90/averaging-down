@@ -12,6 +12,7 @@ st.title("Sequential Backtest")
 summary_path = Path("data/processed/backtest_summary.json")
 equity_path = Path("data/processed/equity_curve.csv")
 cash_path = Path("data/processed/cash_curve.csv")
+validation_path = Path("data/processed/backtest_validation.json")
 
 if not summary_path.exists() or not equity_path.exists():
     st.info("Run `python -m scripts.run_backtest` to create sequential backtest results.")
@@ -53,6 +54,31 @@ if "drawdowns" in summary:
     drawdown_fig = go.Figure(go.Scatter(x=equity.index, y=summary["drawdowns"]["drawdown"], mode="lines", name="Drawdown"))
     drawdown_fig.update_layout(title="Portfolio drawdown", yaxis_title="Drawdown", xaxis_title="UTC session-date label", height=350)
     st.plotly_chart(drawdown_fig, width="stretch")
+
+st.subheader("Research integrity")
+if validation_path.exists():
+    validation = json.loads(validation_path.read_text(encoding="utf-8"))
+    st.metric("Overall validation", validation["overall_status"])
+    columns = st.columns(4)
+    columns[0].metric("Completed cycles", validation["sample_size"]["completed_cycles"])
+    multi_pct = validation["scale_in"]["multi_entry_cycle_percentage"]
+    columns[1].metric("Multi-entry cycles", f"{multi_pct:.1f}%" if multi_pct is not None else "—")
+    cost_fraction = validation["costs"]["cost_over_initial_capital"]
+    columns[2].metric("Recorded costs / capital", f"{cost_fraction:.2%}" if cost_fraction is not None else "—")
+    columns[3].metric("Temporal checks", validation["temporal_integrity"]["status"])
+    critical = [f for section in (validation["integrity"], validation["temporal_integrity"])
+                for f in section["findings"] if f["status"] == "FAIL"]
+    warning_sets = [validation["temporal_integrity"], validation["benchmark"], validation["degeneracy"],
+                    validation["exposure"], validation["sample_size"]]
+    warning_findings = [f for section in warning_sets for f in section["findings"]]
+    warning_findings += validation["costs"]["findings"] + validation["scale_in"]["findings"]
+    warnings = [f for f in warning_findings if f["status"] in ("WARNING", "NOT_EVALUABLE", "FAIL")]
+    if critical:
+        st.error("Integrity or temporal failures: " + "; ".join(f["check_name"] for f in critical))
+    if warnings:
+        st.warning("Research warnings: " + "; ".join(f["check_name"] for f in warnings))
+else:
+    st.info("Run `python -m scripts.run_backtest --validation` to create research-integrity findings.")
 
 st.caption(
     "Next available bar open execution. Backtest implementation validity does not imply "

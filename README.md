@@ -43,9 +43,12 @@ From the repository root:
 
 ```text
 python -m scripts.run_backtest
+python -m scripts.run_backtest --analytics --validation
 ```
 
 The runner loads validated local data through the Data Engine, downloading only if local data is absent. `src/backtest.engine.run_backtest()` is the canonical sequential event-driven pipeline. It writes portfolio/equity/cash curves, position history, orders, fills/trades, and a summary under `data/processed/`. The former vectorized EMA-weight proxy is retained only in `src/backtest/legacy_engine.py` as `run_legacy_backtest()` and is deprecated.
+
+`--analytics` writes the structured M11 report to `backtest_summary.json`; `--validation` writes M12 structural research-integrity findings separately to `backtest_validation.json`. Both operate on the same sequential `BacktestResult`. Validation can also be called directly with `src.validation.run_validation()` and accepts only caller-supplied benchmark curves; it does not download data. A passing report checks implementation consistency and does not establish predictive power or profitability.
 
 ## Tests
 

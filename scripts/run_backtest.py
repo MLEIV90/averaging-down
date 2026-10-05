@@ -2,16 +2,20 @@ import json
 import argparse
 from dataclasses import asdict, is_dataclass
 from datetime import datetime
+from enum import Enum
 
 from src.backtest.engine import run_backtest
 from src.data.config import REPOSITORY_ROOT, load_assets_config
 from src.data.engine import DataEngine
 from src.analytics import run_analytics
+from src.validation import run_validation
 
 
 def _jsonable(value):
     if isinstance(value, datetime):
         return value.isoformat()
+    if isinstance(value, Enum):
+        return value.value
     if is_dataclass(value):
         return _jsonable(asdict(value))
     if isinstance(value, dict):
@@ -21,7 +25,7 @@ def _jsonable(value):
     return value
 
 
-def run(*, analytics: bool = False):
+def run(*, analytics: bool = False, validation: bool = False):
     configured_assets, _ = load_assets_config()
     data_engine = DataEngine()
     data_dict = {}
@@ -63,10 +67,16 @@ def run(*, analytics: bool = False):
     }
     summary = _jsonable(run_analytics(result)) if analytics else raw_summary
     (output_dir / "backtest_summary.json").write_text(json.dumps(summary, indent=2), encoding="utf-8")
+    if validation:
+        report = run_validation(result)
+        (output_dir / "backtest_validation.json").write_text(
+            json.dumps(_jsonable(report), indent=2, allow_nan=False), encoding="utf-8")
     print("Sequential backtest completed; portfolio curves and trade records exported.")
 
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Run sequential backtest and export raw outputs.")
     parser.add_argument("--analytics", action="store_true", help="Write performance analytics to backtest_summary.json.")
-    run(analytics=parser.parse_args().analytics)
+    parser.add_argument("--validation", action="store_true", help="Write research-integrity findings to backtest_validation.json.")
+    options = parser.parse_args()
+    run(analytics=options.analytics, validation=options.validation)

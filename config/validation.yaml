@@ -1,0 +1,8 @@
+validation:
+  absolute_tolerance: 1.0e-8
+  relative_tolerance: 1.0e-10
+  insufficient_cycles: 5
+  limited_cycles: 20
+  insufficient_fills: 10
+  concentration_warning_share: 0.8
+  extreme_gross_to_initial_capital: 1.0
