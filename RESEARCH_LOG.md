@@ -222,3 +222,30 @@ The volatility factor adjusts risk budget only; it does not also scale allocatio
 - Should each cycle have an absolute exposure cap?
 - How should target weight convert to quantity when other portfolio holdings and constraints are included?
 - What minimum quantity and fractional precision apply to actual instruments?
+
+## Exit Engine — 2026-10-05
+
+### Implemented deterministic decision contract
+
+- `ExitEngine.evaluate()` consumes explicit asset, position quantity, cycle anchor and entry timestamp, entry ATR, current timestamp and price, Z_ATR, RSI2, and partial-sell stage. It returns one frozen `ExitDecision` (`HOLD`, `PARTIAL_SELL`, or `FULL_EXIT`) with reason, point-in-time timestamp, reference price, quantity fraction, and diagnostics. It does not query state, market data, cash, orders, or fills, and does not mutate any supplied object.
+- Priority is structural stop, time stop, partial recovery, then HOLD. Stop uses `anchor_price - exits.structural_stop.atr_multiple * entry_atr`; it is a signal condition using current price, not an assumed fill at stop price. Missing entry ATR disables only the stop and is reported in `unavailable_inputs`; missing Z_ATR or RSI2 disables only partial recovery. Non-finite inputs are rejected.
+- Time stop compares actual elapsed seconds against configured calendar-day duration. Partial recovery requires Z_ATR >= configured threshold, RSI2 strictly above its threshold, and `partial_sell_stage == 0`. The decision reports a fraction; it does not derive absolute quantity.
+- `should_reset_cycle()` permits reset only for a FULL_EXIT decision after an externally confirmed fill leaves zero quantity. A partial proposal never resets state. `PositionState.partial_sell_stage` accepts a non-negative completed-stage count; fill handling/increment remains outside this engine.
+- Exit configuration is in `config/exits.yaml`, independently from `risk.stop_atr_multiple`.
+
+### Provisional hypotheses
+
+Structural stop multiple 3.0, maximum cycle duration 30 calendar days, partial recovery at Z_ATR >= 1.5 and RSI2 > 90, and one partial sale of 50% are implementation placeholders only. No optimization or financial validation is implied. Missing recovery indicators do not block stop or time checks; missing entry ATR does not block time or recovery checks.
+
+### OPEN QUESTIONS
+
+- Should the stop stay fixed from T1 using entry ATR, use another volatility reference, or update over the cycle?
+- Should a trailing stop or portfolio drawdown stop exist?
+- How should stop execution be modeled under overnight gaps?
+- Should the time limit use calendar days or trading days, and should it depend on regime?
+- Should there be one partial recovery or multiple stages? Is 50% reasonable?
+- Is RSI2 > 90 too extreme, and is Z_ATR >= 1.5 too late?
+- Should PANIC modify exits, and should a BEAR regime force a reduction?
+- Should the configured exit stop ATR multiple differ from risk sizing's stop multiple? They are independent by design in this milestone.
+
+The exit engine is not integrated into EOD, backtesting, order creation, fills, or accounting. Its tests establish deterministic software behavior only, not strategy validity.

@@ -44,7 +44,6 @@ def test_initial_position_state_is_flat_and_has_specified_defaults():
         {"cycle_active": True, "last_tier": "T1", "position_weight": 0.20,
          "anchor_price": 100.0, "lowest_price": 100.0, "average_entry_price": 100.0,
          "entry_timestamp": datetime(2024, 1, 2), "last_filled_z_atr": -1.6},
-        {"partial_sell_stage": 1},
         {"position_weight": 1.1},
     ],
 )
@@ -59,6 +58,12 @@ def test_active_position_state_requires_consistent_filled_fields():
     assert state.cycle_active
     with pytest.raises(FrozenInstanceError):
         state.position_weight = 0.45
+
+
+def test_partial_sell_stage_records_completed_partial_fill_count():
+    assert active_state(partial_sell_stage=1).partial_sell_stage == 1
+    with pytest.raises(ValueError):
+        active_state(partial_sell_stage=-1)
 
 
 def test_state_machine_stores_only_valid_immutable_position_states():

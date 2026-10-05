@@ -6,6 +6,7 @@ Notable repository changes are recorded here.
 
 ### Added
 
+- Added a deterministic, standalone ExitEngine with structural stop, time stop, partial recovery, explicit HOLD decisions, and cycle-reset contract.
 - Project development and quantitative integrity rules in `AGENTS.md`.
 - Initial repository baseline, limitations, and open research questions in `RESEARCH_LOG.md`.
 - Central data acquisition, validation, normalization, Parquet storage, and JSON provenance through `src/data/`.
@@ -30,6 +31,7 @@ Notable repository changes are recorded here.
 - Replaced the `PositionState` stub with an immutable position-cycle state and strict tier configuration checks; retained the mutating `get_action()` as a legacy compatibility adapter.
 - Added immutable Order and Fill records plus deterministic long-only cash, position, P&L, and account snapshot accounting. Costs default to zero; no broker or automatic fill path is connected.
 - Added a deterministic risk and position sizing layer that converts scale-in weight proposals into provisional quantities under separate allocation, risk, volatility, and cash limits; it remains independent from orders, fills, accounting, and portfolio integration.
+- Added provisional, independent exit parameters in `config/exits.yaml`; partial-sell stages can record completed fills in immutable `PositionState`.
 
 ### Known baseline limitations
 

@@ -1,0 +1,14 @@
+# Provisional exit hypotheses. No value has financial validation.
+exits:
+  structural_stop:
+    enabled: true
+    # Deliberately independent of risk.stop_atr_multiple in config/risk.yaml.
+    atr_multiple: 3.0
+  time_stop:
+    enabled: true
+    max_cycle_days: 30
+  partial_recovery:
+    enabled: true
+    z_atr_threshold: 1.5
+    rsi2_threshold: 90
+    fraction: 0.50

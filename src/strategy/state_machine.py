@@ -35,8 +35,8 @@ class PositionState:
         if isinstance(self.position_weight, bool) or not isinstance(self.position_weight, (int, float)) \
                 or not math.isfinite(self.position_weight) or not 0 <= self.position_weight <= 1:
             raise ValueError("position_weight must be finite and between 0 and 1.")
-        if type(self.partial_sell_stage) is not int or self.partial_sell_stage != 0:
-            raise ValueError("partial_sell_stage must remain 0 in this milestone.")
+        if type(self.partial_sell_stage) is not int or self.partial_sell_stage < 0:
+            raise ValueError("partial_sell_stage must be a non-negative integer.")
 
         fields = (
             self.anchor_price, self.lowest_price, self.average_entry_price,
