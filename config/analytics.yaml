@@ -1,0 +1,4 @@
+analytics:
+  annualization: 252
+  risk_free_rate: 0.0
+  minimum_observations: 2

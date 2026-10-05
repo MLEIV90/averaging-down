@@ -6,6 +6,8 @@ Notable repository changes are recorded here.
 
 ### Added
 
+- Added a standalone immutable analytics report for sequential backtest performance, drawdowns, completed-cycle trade statistics, exposure, actual fill costs, optional caller-supplied benchmark, and per-asset attribution.
+- Added configurable analytics conventions in `config/analytics.yaml`, deterministic synthetic unit coverage, optional `--analytics` summary export, and Backtest page metrics/drawdown display.
 - Added a sequential event-driven backtest that routes point-in-time proposals through sizing, portfolio constraints, next-bar paper fills, accounting, position state, and exit evaluation.
 - Added provisional zero-default commission/slippage configuration and structured portfolio, order, trade, position, pending-order, and per-asset outputs.
 - Passed estimated fill-cost rates into PortfolioEngine cash-capacity evaluation so accepted allocations preserve the configured reserve after estimated costs.

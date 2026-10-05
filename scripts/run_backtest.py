@@ -1,10 +1,12 @@
 import json
+import argparse
 from dataclasses import asdict, is_dataclass
 from datetime import datetime
 
 from src.backtest.engine import run_backtest
 from src.data.config import REPOSITORY_ROOT, load_assets_config
 from src.data.engine import DataEngine
+from src.analytics import run_analytics
 
 
 def _jsonable(value):
@@ -19,7 +21,7 @@ def _jsonable(value):
     return value
 
 
-def run():
+def run(*, analytics: bool = False):
     configured_assets, _ = load_assets_config()
     data_engine = DataEngine()
     data_dict = {}
@@ -46,7 +48,7 @@ def run():
         _jsonable(result.trades), indent=2), encoding="utf-8")
     (output_dir / "backtest_orders.json").write_text(json.dumps(
         _jsonable(result.orders), indent=2), encoding="utf-8")
-    (output_dir / "backtest_summary.json").write_text(json.dumps({
+    raw_summary = {
         "total_transaction_costs": result.total_transaction_costs,
         "configuration": _jsonable(result.configuration),
         "order_count": len(result.orders),
@@ -58,9 +60,13 @@ def run():
         "pending_orders": [{"asset": record.order.asset if record.order else None,
                             "status": record.status, "action": record.action,
                             "reason": record.reason} for record in result.pending_orders],
-    }, indent=2), encoding="utf-8")
+    }
+    summary = _jsonable(run_analytics(result)) if analytics else raw_summary
+    (output_dir / "backtest_summary.json").write_text(json.dumps(summary, indent=2), encoding="utf-8")
     print("Sequential backtest completed; portfolio curves and trade records exported.")
 
 
 if __name__ == "__main__":
-    run()
+    parser = argparse.ArgumentParser(description="Run sequential backtest and export raw outputs.")
+    parser.add_argument("--analytics", action="store_true", help="Write performance analytics to backtest_summary.json.")
+    run(analytics=parser.parse_args().analytics)
