@@ -6,6 +6,7 @@ Notable repository changes are recorded here.
 
 ### Added
 
+- Added a deterministic portfolio allocation engine that constrains per-asset sizing proposals by configured asset, gross exposure, and cash reserve limits.
 - Added a deterministic, standalone ExitEngine with structural stop, time stop, partial recovery, explicit HOLD decisions, and cycle-reset contract.
 - Project development and quantitative integrity rules in `AGENTS.md`.
 - Initial repository baseline, limitations, and open research questions in `RESEARCH_LOG.md`.

@@ -249,3 +249,30 @@ Structural stop multiple 3.0, maximum cycle duration 30 calendar days, partial r
 - Should the configured exit stop ATR multiple differ from risk sizing's stop multiple? They are independent by design in this milestone.
 
 The exit engine is not integrated into EOD, backtesting, order creation, fills, or accounting. Its tests establish deterministic software behavior only, not strategy validity.
+
+## Portfolio Allocation Engine — 2026-10-05
+
+### Implemented deterministic contract
+
+- `PortfolioEngine.evaluate(snapshot, proposals, reference_prices)` consumes an immutable `PortfolioSnapshot`, timestamped `AllocationProposal` wrappers around `SizingDecision`, and supplied prices. It returns immutable per-asset requested/approved quantities and notionals, current/resulting exposure, reduction, constraint attribution, proposal timestamp, and diagnostics. Proposals later than the snapshot are rejected. `BTC-USD` is normalized to `BTC`, consistent with RiskSizingEngine; duplicate alias proposals are rejected.
+- Positive proposals are buys only and retain the sizing layer's requested quantity subject to portfolio limits. Configured constraints cap approved quantity; attribution is `NONE`, a single constraint name, `MULTIPLE_CONSTRAINTS`, or `ZERO_EQUITY`. Existing quantities count toward asset and gross exposure. The engine does not change `SizingDecision`, query market data, or create orders, fills, or accounting entries.
+- Competing proposals follow `priority_order` in `config/portfolio.yaml`, and returned decisions use the same order. This is an explicit, configurable capacity-allocation rule, not an expected-return or risk ranking. The current BTC, GLD, SPY order is a provisional operational precedence used only to assign limited capacity deterministically; it is not inherited from a quantitative study.
+- The snapshot must represent the full supported long-only portfolio: equity equals available cash plus supported holdings valued at supplied prices. This implementation assumes `available_cash` is the full cash balance. At zero equity, only an empty portfolio is accepted and positive proposals are approved at zero.
+
+### Provisional configuration and limitations
+
+The initial limits preserve legacy repository defaults: 70% maximum gross exposure from `CapitalDeploymentEngine`, 30% minimum cash reserve, and SPY 35% / BTC 10% / GLD 25% concentration caps from the legacy allocation helper. These values were not independently researched, optimized, or financially validated. Given a fully reconciled portfolio, the 70% gross and 30% cash reserve limits leave the same incremental capacity and can bind simultaneously. There is no lot-size rounding, transaction-cost allowance, sell/rebalance proposal, leverage, risk contribution, portfolio volatility, covariance, or execution model. The engine is not integrated into EOD, backtest, UI, or accounting.
+
+### OPEN QUESTIONS
+
+- Is a 70% gross exposure limit appropriate, or should gross exposure be capped at 100%?
+- Should the cash reserve remain static at 30% or vary with volatility/regime?
+- Should BTC receive distinct portfolio treatment, and are the existing concentration limits appropriate?
+- Should allocation priority remain configurable; what research basis should determine it beyond deterministic capacity allocation?
+- Should concentration use market value, risk contribution, or another measure?
+- Should a portfolio volatility/covariance limit be added?
+- Should portfolio-level risk budget replace or complement per-asset RiskSizingEngine limits?
+- Should reserved/unmodeled balances be represented explicitly instead of requiring equity to reconcile to supported holdings plus available cash?
+- How should price movement between sizing reference and execution/fill affect approved notional and cash reserve?
+
+Tests establish deterministic implementation behavior only, not financial validity.

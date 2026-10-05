@@ -211,3 +211,26 @@ BUY/SELL cash, long-only quantities, weighted average entry, realized P&L on sel
 `RiskSizingEngine` in `src/risk/sizing_engine.py` accepts an immutable `ScaleInDecision` plus explicit equity, available cash, reference price, ATR, and realized volatility, and returns an immutable `SizingDecision`. It proposes fractional quantity only; it does not read accounting state, create orders/fills, mutate strategy state, or integrate portfolio constraints. `reference_price` is a sizing input and may differ from the eventual fill price.
 
 Configuration lives in `config/risk.yaml`. Provisional formulas are allocation quantity = equity × incremental weight / reference price; stop distance = ATR × stop ATR multiple; risk quantity = risk budget / stop distance; volatility-adjusted risk budget = risk budget × clipped target-vol / realized-vol factor; final quantity = the minimum of allocation, volatility-adjusted risk, and available-cash quantities. Equal minima bind in deterministic order: ALLOCATION, RISK, CASH. Values remain fractional and are not rounded to instrument lot sizes. These parameter values and conventions are research hypotheses, not financially validated sizing rules; see `RESEARCH_LOG.md`.
+
+## Portfolio Allocation Engine
+
+`PortfolioEngine` in `src/portfolio/engine.py` accepts an immutable
+`PortfolioSnapshot`, timestamped `AllocationProposal` values wrapping
+`SizingDecision`, and explicit point-in-time reference prices. It returns
+immutable per-asset allocation decisions and does not alter risk sizing,
+accounting, position state, orders, or fills. Each proposal timestamp must be no
+later than the portfolio snapshot. The supplied prices must match each sizing
+proposal's reference price.
+
+Portfolio constraints live in `config/portfolio.yaml`. Provisional defaults
+retain legacy assumptions: 70% maximum gross exposure, 30% minimum cash reserve,
+and per-asset limits of SPY 35%, BTC 10%, GLD 25%. The configured capacity order
+BTC, GLD, SPY deterministically allocates finite capacity and is not a financial
+ranking. Existing positions count toward the limits. Snapshot equity must equal
+available cash plus supported holdings valued at the supplied prices. Unsupported
+assets, leverage, sells, and portfolio volatility or covariance limits are not
+modeled.
+
+This engine is standalone and is not connected to EOD, the legacy backtest,
+Dashboard, order creation, fills, or accounting. Values and software behavior
+are provisional research infrastructure, not validated portfolio guidance.

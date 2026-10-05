@@ -7,3 +7,13 @@ portfolio:
     enabled: true
     allow_full_deployment: false
     cash_is_valid_position: true
+  # Provisional software defaults only; not financially validated.
+  allocation_constraints:
+    max_gross_exposure: 0.70
+    minimum_cash_reserve: 0.30
+    max_asset_weight:
+      SPY: 0.35
+      BTC: 0.10
+      GLD: 0.25
+    # Deterministic capacity priority, not an investment ranking.
+    priority_order: [BTC, GLD, SPY]
