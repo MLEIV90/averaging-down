@@ -18,12 +18,21 @@ from src.features.config import FeatureConfig
 from src.features.engine import FeatureEngine
 
 
-def run_backtest(data_dict, feature_config: FeatureConfig | None = None, **engine_options) -> BacktestResult:
+def run_backtest(
+    data_dict,
+    feature_config: FeatureConfig | None = None,
+    *,
+    evaluation_start=None,
+    evaluation_end=None,
+    **engine_options,
+) -> BacktestResult:
     """Run raw validated OHLCV through the canonical event-driven engine."""
     feature_engine = engine_options.pop("feature_engine", None)
     if feature_engine is None:
         feature_engine = FeatureEngine(feature_config)
-    return BacktestEngine(feature_engine=feature_engine, **engine_options).run(data_dict)
+    return BacktestEngine(feature_engine=feature_engine, **engine_options).run(
+        data_dict, evaluation_start=evaluation_start, evaluation_end=evaluation_end
+    )
 
 
 __all__ = [

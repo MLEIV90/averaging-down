@@ -236,9 +236,26 @@ class BacktestEngine:
             asset: ScaleInEngine(asset) for asset in SUPPORTED_ASSETS
         })
 
-    def run(self, data: Mapping[str, pd.DataFrame]) -> BacktestResult:
+    def run(
+        self,
+        data: Mapping[str, pd.DataFrame],
+        *,
+        evaluation_start: pd.Timestamp | datetime | None = None,
+        evaluation_end: pd.Timestamp | datetime | None = None,
+    ) -> BacktestResult:
         if not isinstance(data, Mapping):
             raise TypeError("data must map configured asset identifiers to OHLCV DataFrames.")
+        def boundary(value, name):
+            if value is None:
+                return None
+            stamp = pd.Timestamp(value)
+            if stamp.tzinfo is None:
+                raise ValueError(f"{name} must be timezone-aware.")
+            return stamp.tz_convert("UTC")
+        start_boundary = boundary(evaluation_start, "evaluation_start")
+        end_boundary = boundary(evaluation_end, "evaluation_end")
+        if start_boundary is not None and end_boundary is not None and start_boundary > end_boundary:
+            raise ValueError("evaluation_start must be <= evaluation_end.")
         normalized: dict[str, pd.DataFrame] = {}
         for raw_asset, frame in data.items():
             asset = _asset_name(raw_asset)
@@ -297,6 +314,10 @@ class BacktestEngine:
         rsi_column = f"rsi{cfg.rsi_fast_period}"
 
         for timestamp in timestamps:
+            if start_boundary is not None and timestamp < start_boundary:
+                continue
+            if end_boundary is not None and timestamp > end_boundary:
+                continue
             ts_dt = _timestamp(timestamp)
             current_assets = [asset for asset in SUPPORTED_ASSETS
                               if asset in bars_by_asset and timestamp in bars_by_asset[asset].index]

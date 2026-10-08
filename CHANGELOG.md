@@ -54,3 +54,11 @@ Notable repository changes are recorded here.
 - Reuses the production backtest, Analytics and Validation engines for a single exact baseline and controlled one-factor variants.
 - Added explicit ablations and sensitivity grid; overrides exist in memory and production YAML is checked byte-for-byte after each suite.
 - This milestone does not optimize parameters or change default strategy configuration.
+
+# M14 — Walk-forward / out-of-sample validation
+
+- Added expanding and rolling chronological windows, optional embargo, explicit warm-up context and isolated OOS backtests.
+- Reused M10 Backtest, M11 Analytics, M12 Validation, and M13 production configuration hashing.
+- Added normalized chained OOS portfolio analytics, gap/overlap coverage, dataset fingerprint, deterministic reports, and per-window pending-order/validation reporting.
+- Added a bounded evaluation interval to the canonical backtest so warm-up bars cannot generate OOS trades or performance points.
+- No parameter fitting, selection, network downloads, or production strategy configuration changes.

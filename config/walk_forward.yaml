@@ -1,0 +1,15 @@
+# Temporal research settings only; these provisional bar counts are not strategy parameters.
+walk_forward:
+  mode: expanding
+  train_bars: 504
+  validation_bars: 126
+  test_bars: 63
+  step_bars: 63
+  embargo_bars: 0
+  minimum_train_bars: 252
+  minimum_validation_bars: 63
+  minimum_test_bars: 20
+  warmup_bars: 252
+  reset_state_each_test_window: true
+  require_non_overlapping_tests: true
+  aggregate_oos: true

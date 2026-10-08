@@ -367,3 +367,19 @@ Configuration overrides are constructed in memory. The suite snapshots productio
 Limitations: results describe only caller-provided data and current engine architecture. Portfolio constraint ablation removes exposure, reserve and per-asset caps while retaining deterministic allocation mechanics. The no-scale-in counterfactual retains T1. Existing validation checks are software/research-integrity diagnostics, not proof of economic validity. Some validation checks can be NOT_EVALUABLE on the present BacktestResult schema. Observed sensitivity does not imply causal economic significance. This milestone makes no profitability or statistical-significance claim.
 
 OPEN QUESTION: approve additional target-volatility parameters, more assets/market data, or different perturbation values only as explicit future research decisions; this implementation does not select or recommend them.
+
+# M14 — Walk-forward / out-of-sample validation
+
+Objective: measure temporal behavior of the existing fixed production strategy through chronological test windows, without fitting or selecting parameters.
+
+Method: observed UTC bar timestamps define all boundaries. Expanding training context grows by step; rolling context remains train_bars long. Validation immediately precedes an optional embargo and test. Default embargo is zero because M14 fits no labels or parameters; a positive value can be configured. Each test run receives the last warmup_bars of prior market context plus the test bars, but BacktestEngine scores/processes only the inclusive test interval. A fresh canonical engine and initial account are created for each test window. Any order still pending at test_end remains pending in that result.
+
+Aggregation: for disjoint test windows, normalized portfolio equity starts at 1.0 and compounds each within-window equity ratio. Reset-window opening marks are excluded from return calculations after the first window; there is no compounded return across dates not evaluated. M11 Analytics calculates aggregate portfolio-path statistics, rather than averaging window Sharpe or CAGR. Test overlap is reported and aggregate performance metrics are withheld. Coverage gaps count omitted observations from the caller-provided union timeline, not calendar weekdays.
+
+M14 reuses M10 Backtest, M11 Analytics, M12 Validation, and M13 configuration hashing. The report also includes a deterministic input-frame fingerprint. It does not infer provider/source provenance unavailable from caller-supplied frames. Train and validation backtests are intentionally absent because they are not used for fitting or selection; their periods are manifest context only.
+
+Window Analytics includes M11 trade/cost/exposure and per-asset reports. The aggregate OOS path reports portfolio performance and additive fills, completed/winning/losing cycles, costs, and realized P&L. M11 does not expose per-cycle return observations; M14 does not invent aggregate average/best/worst cycle return fields.
+
+M14 does not establish profitability or prove absence of overfitting. It provides a temporal OOS evaluation framework. Parameters remain fixed rather than fitted inside training windows. Results depend on historical data and execution assumptions; next-open daily simulation cannot eliminate market microstructure uncertainty. Window results may be noisy with few trades; BTC differs in temporal and volatility characteristics from SPY/GLD. Existing annualization conventions are provisional.
+
+OPEN QUESTION: calendar-aware missing-session diagnostics need explicit exchange/asset calendars; M14 only reports missing bars between its planned OOS segments in the supplied union timeline. Confirm the provisional warmup_bars and minimum window lengths before interpreting a production study.

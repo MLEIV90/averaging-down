@@ -270,3 +270,47 @@ threshold. Portfolio caps are evaluated at the decision reference price and can
 also drift after an execution gap. Daily bars do not identify intraday ordering.
 
 **Backtest implementation validity does not imply strategy profitability or financial validity.**
+
+## Walk-forward / out-of-sample research
+
+M14 provides fixed-strategy chronological evaluation through
+src.research.walk_forward.run_walk_forward(data). It accepts caller-supplied,
+validated OHLCV frames and does not load or download market data. Temporal
+settings only live in config/walk_forward.yaml; strategy thresholds are read
+unchanged from production configuration.
+
+Each manifest separates TRAIN, VALIDATION, an optional embargo, and TEST
+boundaries by explicit observed-bar timestamps. Train and validation are
+historical contexts only: M14 has no parameter fitting or selection, and only
+TEST is scored. Expanding and rolling windows are supported. Independent test
+windows instantiate a fresh canonical backtest, so cash, positions, strategy
+cycles and queued orders reset. A signal observed at bar t remains eligible
+for execution at the next available bar's open. Orders still pending at the
+test end are reported and are not filled beyond that boundary.
+
+Bars before test_start are passed as feature warm-up context. BacktestEngine
+computes features on them but scores no equity points and processes no orders
+until the configured test boundary. Warm-up context is not OOS coverage.
+
+M11 Analytics and M12 Validation are run for each test result. Aggregate OOS
+equity starts at 1.0 and chains within-window equity ratios across
+non-overlapping test windows. Reset-window opening marks do not create
+artificial zero returns. M11 computes aggregate return, drawdown, volatility,
+Sharpe and Sortino over the chained path; window Sharpe/CAGR are never
+averaged. Gaps count omitted bars in the supplied union timestamp timeline.
+If test windows overlap, duplicate observations are reported and aggregate
+performance metrics are withheld.
+
+The report includes SHA-256 hashes for production configuration and supplied
+data, window-level analytics and validation findings, coverage, gaps, pending
+orders, and deterministic run hash. Caller-supplied data provenance beyond
+the verified content fingerprint is not inferred.
+
+M14 does not establish profitability or prove absence of overfitting. It
+provides a temporal OOS evaluation framework. Parameters remain fixed rather
+than fitted inside training windows; performance depends on historical data
+and execution assumptions. Daily bars and next-open execution do not remove
+market microstructure uncertainty. Few trades can make window results noisy;
+BTC has different temporal and volatility characteristics from SPY and GLD.
+Annualization conventions remain provisional. Exchange holidays and missing
+market sessions cannot be diagnosed definitively without market calendars.
